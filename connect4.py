@@ -84,6 +84,17 @@ class Game:
 		"""
 		return copy.deepcopy(self.board)
 
+	def get_board_for_nn(self):
+		"""Creates a board state which is more suitable for a neural network input
+
+		@return: (np.array) board state consisting of 3 layers: free, occupied by player 1, occupied by player 2.
+		"""
+		board_for_nn = np.zeros((3, self.height, self.width))
+		board_for_nn[0, self.board == 0] = 1
+		board_for_nn[1, self.board == 1] = 1
+		board_for_nn[2, self.board == 2] = 1
+		return board_for_nn
+
 	def invert_board(self):
 		"""Inverts the board in place.
 
