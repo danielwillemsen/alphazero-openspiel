@@ -17,7 +17,7 @@ class Game:
 		self.moves_max = kwargs.get('moves_max', 50)
 
 		self.moves = []
-		self.board = np.zeros((self.width,self.height))
+		self.board = np.zeros((self.height, self.width))
 
 	def is_terminal(self):
 		"""Checks if game is terminal
