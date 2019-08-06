@@ -13,8 +13,8 @@ class Net(nn.Module):
 		self.conv1 = nn.Conv2d(3, 50, (4, 4), padding=1)
 		self.conv2 = nn.Conv2d(50, 50, (4, 4), padding=2)
 		self.conv3 = nn.Conv2d(50, 50, (4, 4), padding=1)
-		self.conv4 = nn.Conv2d(50, 50, (4, 4), padding=2)
-		self.conv5 = nn.Conv2d(50, 50, (4, 4), padding=1)
+		#self.conv4 = nn.Conv2d(50, 50, (4, 4), padding=2)
+		#self.conv5 = nn.Conv2d(50, 50, (4, 4), padding=1)
 		self.conv6 = nn.Conv2d(50, 50, (4, 4), padding=1)
 
 		self.fc1 = nn.Linear((self.height-2) * (self.width-2) * 50, 100)
@@ -28,12 +28,11 @@ class Net(nn.Module):
 		@param x: input tensor
 		@return: Policy tensor and value tensor
 		"""
-		x = x.unsqueeze(0)
 		x = F.leaky_relu(self.conv1(x))
 		x = F.leaky_relu(self.conv2(x))
 		x = F.leaky_relu(self.conv3(x))
-		x = F.leaky_relu(self.conv4(x))
-		x = F.leaky_relu(self.conv5(x))
+		#x = F.leaky_relu(self.conv4(x))
+		#x = F.leaky_relu(self.conv5(x))
 		x = F.leaky_relu(self.conv6(x))
 
 		x = x.view(-1,(self.height-2) * (self.width-2) * 50)
@@ -49,6 +48,8 @@ class Net(nn.Module):
 		@return: List of policy and the value
 		"""
 		tens = torch.from_numpy(game.get_board_for_nn()).float().to(self.device)
+		tens = tens.unsqueeze(0)
+
 		p_t, v_t = self.forward(tens)
 		ps = p_t.tolist()[0]
 		v = float(v_t)

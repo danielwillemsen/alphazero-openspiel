@@ -2,6 +2,8 @@ import random
 import torch
 import torch.nn as nn
 import copy
+import numpy as np
+import time
 
 from connect4net import Net
 from mctsagent import MCTSAgent
@@ -10,16 +12,17 @@ from mctsagent import MCTSAgent
 class Trainer:
 	def __init__(self):
 
-		self.board_width = 7
-		self.board_height = 6
-		self.n_in_row = 4
+		self.board_width = 5
+		self.board_height = 5
+		self.n_in_row = 3
 		self.n_games_per_generation = 25
-		self.batches_per_generation = 3000
+		self.batches_per_generation = 1000
 		self.n_games_buffer = 2000
 		self.buffer = []
 		self.n_tests_full = 10
 		self.n_tests_net = 250
 		self.use_gpu = True
+		self.batch_size = 16
 
 		self.criterion_policy = nn.BCELoss()
 		self.criterion_value = nn.MSELoss()
@@ -39,10 +42,8 @@ class Trainer:
 										board_width=self.board_width,
 										board_height=self.board_height,
 										n_in_row=self.n_in_row,
-									    use_gpu = self.use_gpu)
-		self.optimizer = torch.optim.Adam(self.current_net.parameters(), lr=0.0001, weight_decay=0.0001)
-
-		self.gpu_available = torch.cuda.is_available()
+										use_gpu = self.use_gpu)
+		self.optimizer = torch.optim.Adam(self.current_net.parameters(), lr=0.001, weight_decay=0.0001)
 
 	def test_vs_random(self):
 		print("Testing")
@@ -68,12 +69,27 @@ class Trainer:
 			float(losses) / self.n_tests_net))
 		return
 
-	def net_step(self, batch):
+	def net_step(self, flattened_buffer):
+		"""Samples a random batch and updates the NN parameters with this bat
+
+		@return:
+		"""
 		self.current_net.zero_grad()
-		x = torch.from_numpy(batch[1]).float().to(self.device)
-		p_r = torch.tensor(batch[2]).float().to(self.device)
-		v_r = torch.tensor(batch[3]).float().to(self.device)
+
+		# Select samples and format them to use as batch
+		sample_ids = np.random.randint(len(flattened_buffer), size=self.batch_size)
+		x = [flattened_buffer[i][1] for i in sample_ids]
+		p_r = [flattened_buffer[i][2] for i in sample_ids]
+		v_r = [flattened_buffer[i][3] for i in sample_ids]
+
+		x = torch.from_numpy(np.array(x)).float().to(self.device)
+		p_r = torch.tensor(np.array(p_r)).float().to(self.device)
+		v_r = torch.tensor(np.array(v_r)).float().to(self.device)
+
+		# Pass through network
 		p_t, v_t = self.current_net(x)
+
+		# Backward pass
 		loss_v = self.criterion_value(v_t, v_r)
 		loss_p = self.criterion_policy(p_t, p_r)
 		loss = loss_v + loss_p
@@ -87,8 +103,7 @@ class Trainer:
 		flattened_buffer = [sample for game in self.buffer for sample in game]
 		loss_tot = 0
 		for i in range(self.batches_per_generation):
-			batch = random.choice(flattened_buffer)
-			loss = self.net_step(batch)
+			loss = self.net_step(flattened_buffer)
 			loss_tot += loss
 			if i % 200 == 0:
 				print("Batch: " + str(i) + "Loss: " + str(loss_tot/200.))
