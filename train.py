@@ -19,16 +19,30 @@ class Trainer:
 		self.buffer = []
 		self.n_tests_full = 10
 		self.n_tests_net = 250
+		self.use_gpu = True
 
 		self.criterion_policy = nn.BCELoss()
 		self.criterion_value = nn.MSELoss()
 
-		self.current_net = Net(width=self.board_width, height=self.board_height)
+		# @todo clean cuda code up
+		if self.use_gpu:
+			if not torch.cuda.is_available():
+				print("Tried to use GPU, but none is available")
+				self.use_gpu = False
+
+		self.device = torch.device("cuda:0" if self.use_gpu else "cpu")
+
+		self.current_net = Net(width=self.board_width, height=self.board_height, device=self.device)
+		self.current_net.to(self.device)
+
 		self.current_agent = MCTSAgent(self.current_net,
 										board_width=self.board_width,
 										board_height=self.board_height,
-										n_in_row=self.n_in_row)
+										n_in_row=self.n_in_row,
+									    use_gpu = self.use_gpu)
 		self.optimizer = torch.optim.Adam(self.current_net.parameters(), lr=0.0001, weight_decay=0.0001)
+
+		self.gpu_available = torch.cuda.is_available()
 
 	def test_vs_random(self):
 		print("Testing")
@@ -56,9 +70,9 @@ class Trainer:
 
 	def net_step(self, batch):
 		self.current_net.zero_grad()
-		x = torch.from_numpy(batch[1]).type(torch.float)
-		p_r = torch.tensor(batch[2]).type(torch.float)
-		v_r = torch.tensor(batch[3]).type(torch.float)
+		x = torch.from_numpy(batch[1]).float().to(self.device)
+		p_r = torch.tensor(batch[2]).float().to(self.device)
+		v_r = torch.tensor(batch[3]).float().to(self.device)
 		p_t, v_t = self.current_net(x)
 		loss_v = self.criterion_value(v_t, v_r)
 		loss_p = self.criterion_policy(p_t, p_r)
