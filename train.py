@@ -5,6 +5,7 @@ import copy
 import numpy as np
 import time
 
+from examplegenerator import ExampleGenerator
 from connect4net import Net
 from mctsagent import MCTSAgent
 
@@ -15,7 +16,7 @@ class Trainer:
 		self.board_width = 5
 		self.board_height = 5
 		self.n_in_row = 3
-		self.n_games_per_generation = 3
+		self.n_games_per_generation = 10
 		self.batches_per_generation = 1000
 		self.n_games_buffer = 2000
 		self.buffer = []
@@ -37,6 +38,11 @@ class Trainer:
 
 		self.current_net = Net(width=self.board_width, height=self.board_height, device=self.device)
 		self.current_net.to(self.device)
+
+		self.generator = ExampleGenerator(self.current_net, board_width=self.board_width,
+										board_height=self.board_height,
+										n_in_row=self.n_in_row,
+										use_gpu=self.use_gpu)
 
 		self.current_agent = MCTSAgent(self.current_net.predict,
 										board_width=self.board_width,
@@ -112,12 +118,18 @@ class Trainer:
 	def generate_examples(self, n_games):
 		# Generate new training samples
 		print("Generating Data")
+		start = time.time()
 		for i in range(n_games):
 			print("Game " + str(i) + " / " + str(n_games))
 			examples = self.current_agent.play_game_self()
 			self.buffer.append(examples)
-		print("Finished Generating Data")
+		print("Finished Generating Data (normal)")
+		print(time.time()-start)
 
+		start = time.time()
+		self.generator.generate_examples(n_games)
+		print("Finished Generating Data (threaded)")
+		print(time.time()-start)
 		# Remove oldest entries from buffer if too long
 		if len(self.buffer)>self.n_games_buffer:
 			print("Buffer full. Deleting oldest samples.")
