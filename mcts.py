@@ -65,12 +65,12 @@ class Node:
 class MCTS:
 	"""Main Monte-Carlo tree class. Should be kept during the whole game.
 	"""
-	def __init__(self, net, **kwargs):
+	def __init__(self, policy_fn, **kwargs):
 		self.c_puct = float(kwargs.get('c_puct', 1.0))
 		self.n_playouts = int(kwargs.get('n_playouts', 100))
 		self.use_dirichlet = bool(kwargs.get('use_dirichlet', True))
 		self.root = Node(None, 0.0)
-		self.net = net
+		self.policy_fn = policy_fn
 
 	def playout(self, game):
 		"""
@@ -89,7 +89,7 @@ class MCTS:
 		# Expansion
 		if not game.is_terminal():
 			# @todo add possibility of using simulation instead of neural net prediction (for pure MCTS)
-			prior_ps, leaf_value = self.net.predict(game)
+			prior_ps, leaf_value = self.policy_fn(game)
 
 			# Add dirichlet noise @todo check if this is the correct location for dirichlet noise
 			if self.use_dirichlet:

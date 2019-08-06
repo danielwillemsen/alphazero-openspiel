@@ -2,11 +2,12 @@ from connect4 import Game
 from mcts import MCTS
 import numpy as np
 import warnings
+import multiprocessing
 
 
 class MCTSAgent:
-	def __init__(self, net, **kwargs):
-		self.net = net
+	def __init__(self, policy_fn, **kwargs):
+		self.policy_fn = policy_fn
 		self.board_width = int(kwargs.get('board_width', 7))
 		self.board_height = int(kwargs.get('board_height', 6))
 		self.n_in_row = int(kwargs.get('n_in_row', 4))
@@ -32,7 +33,7 @@ class MCTSAgent:
 		"""
 		examples = []
 		game = Game(width=self.board_width, height=self.board_height, n_in_row=self.n_in_row)
-		mcts = MCTS(self.net)
+		mcts = MCTS(self.policy_fn)
 		while not game.is_terminal():
 			game.invert_board()
 			policy = mcts.search(game)
@@ -60,7 +61,7 @@ class MCTSAgent:
 		@return:
 		"""
 		game = Game(width=self.board_width, height=self.board_height, n_in_row=self.n_in_row)
-		mcts = MCTS(self.net)
+		mcts = MCTS(self.policy_fn)
 
 		# Randomly select starting player
 		if np.random.randint(0, 2) == 1:
@@ -88,7 +89,6 @@ class MCTSAgent:
 		@return:
 		"""
 		game = Game(width=self.board_width, height=self.board_height, n_in_row=self.n_in_row)
-		mcts = MCTS(self.net)
 
 		# Randomly select starting player
 		if np.random.randint(0, 2) == 1:
@@ -96,7 +96,7 @@ class MCTSAgent:
 
 		# Play game
 		while not game.is_terminal():
-			policy, value = self.net.predict(game)
+			policy, value = self.policy_fn(game)
 			action = self.select_move_optimal(policy)
 			game.move(action, 1)
 			if not game.is_terminal():

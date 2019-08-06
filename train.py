@@ -15,14 +15,14 @@ class Trainer:
 		self.board_width = 5
 		self.board_height = 5
 		self.n_in_row = 3
-		self.n_games_per_generation = 25
+		self.n_games_per_generation = 3
 		self.batches_per_generation = 1000
 		self.n_games_buffer = 2000
 		self.buffer = []
-		self.n_tests_full = 10
+		self.n_tests_full = 3
 		self.n_tests_net = 250
 		self.use_gpu = True
-		self.batch_size = 16
+		self.batch_size = 2
 
 		self.criterion_policy = nn.BCELoss()
 		self.criterion_value = nn.MSELoss()
@@ -38,7 +38,7 @@ class Trainer:
 		self.current_net = Net(width=self.board_width, height=self.board_height, device=self.device)
 		self.current_net.to(self.device)
 
-		self.current_agent = MCTSAgent(self.current_net,
+		self.current_agent = MCTSAgent(self.current_net.predict,
 										board_width=self.board_width,
 										board_height=self.board_height,
 										n_in_row=self.n_in_row,
@@ -129,7 +129,7 @@ class Trainer:
 		while True:
 			self.generate_examples(self.n_games_per_generation)
 			self.train_network()
-			self.current_agent = MCTSAgent(self.current_net,
+			self.current_agent = MCTSAgent(self.current_net.predict,
 											board_width=self.board_width,
 											board_height=self.board_height,
 											n_in_row=self.n_in_row)
