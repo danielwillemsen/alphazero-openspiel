@@ -135,4 +135,4 @@ class Game:
 		"""
 		column = np.random.randint(0, self.width)
 		self.move(column, tile)
-		return
+		return column

@@ -8,9 +8,15 @@ class Net(nn.Module):
 		super(Net, self).__init__()
 		self.width = int(kwargs.get('width', 7))
 		self.height = int(kwargs.get('height', 6))
-		self.conv1 = nn.Conv2d(3, 160, (4, 4))
-		self.fc1 = nn.Linear((self.height-3) * (self.width-3) * 160, 80)
-		self.fc2 = nn.Linear(80, self.width + 1)
+		self.conv1 = nn.Conv2d(3, 50, (4, 4), padding=1)
+		self.conv2 = nn.Conv2d(50, 50, (4, 4), padding=2)
+		self.conv3 = nn.Conv2d(50, 50, (4, 4), padding=1)
+		self.conv4 = nn.Conv2d(50, 50, (4, 4), padding=2)
+		self.conv5 = nn.Conv2d(50, 50, (4, 4), padding=1)
+		self.conv6 = nn.Conv2d(50, 50, (4, 4), padding=1)
+
+		self.fc1 = nn.Linear((self.height-2) * (self.width-2) * 50, 100)
+		self.fc2 = nn.Linear(100, self.width + 1)
 		return
 
 	def forward(self, x):
@@ -20,9 +26,15 @@ class Net(nn.Module):
 		@return: Policy tensor and value tensor
 		"""
 		x = x.unsqueeze(0)
-		x = F.relu(self.conv1(x))
-		x = x.view(-1,(self.height-3) * (self.width-3) * 160)
-		x = F.relu(self.fc1(x))
+		x = F.leaky_relu(self.conv1(x))
+		x = F.leaky_relu(self.conv2(x))
+		x = F.leaky_relu(self.conv3(x))
+		x = F.leaky_relu(self.conv4(x))
+		x = F.leaky_relu(self.conv5(x))
+		x = F.leaky_relu(self.conv6(x))
+
+		x = x.view(-1,(self.height-2) * (self.width-2) * 50)
+		x = F.leaky_relu(self.fc1(x))
 		x = self.fc2(x)
 		xp, v = x.split(self.width, 1)
 		return F.softmax(xp), F.tanh(v)

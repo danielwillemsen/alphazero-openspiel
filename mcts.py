@@ -67,8 +67,8 @@ class MCTS:
 	"""
 	def __init__(self, net, **kwargs):
 		self.c_puct = float(kwargs.get('c_puct', 1.0))
-		self.n_playouts = int(kwargs.get('n_playouts', 500))
-
+		self.n_playouts = int(kwargs.get('n_playouts', 100))
+		self.use_dirichlet = bool(kwargs.get('use_dirichlet', True))
 		self.root = Node(None, 0.0)
 		self.net = net
 
@@ -88,8 +88,13 @@ class MCTS:
 
 		# Expansion
 		if not game.is_terminal():
-			# @todo add possiblity of using simulation instead of neural net prediction (for pure MCTS)
+			# @todo add possibility of using simulation instead of neural net prediction (for pure MCTS)
 			prior_ps, leaf_value = self.net.predict(game)
+
+			# Add dirichlet noise @todo check if this is the correct location for dirichlet noise
+			if self.use_dirichlet:
+				prior_ps = (0.8 * np.array(prior_ps) + 0.2 * np.random.dirichlet(0.3 * np.ones(len(prior_ps)))).tolist()
+
 			node.expand(prior_ps)
 		else:
 			if game.is_winner(1):
