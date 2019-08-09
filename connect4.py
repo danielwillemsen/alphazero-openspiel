@@ -37,44 +37,53 @@ class Game:
 		@return: (bool) true if the player has won
 		"""
 		# Check horizontal
-		for y in range(self.height):
-			for x in range(self.width - self.n_in_row + 1):
-				winner_here = True
-				for pos in range(self.n_in_row):
-					if not self.board[y, x + pos] == tile:
-						winner_here = False
-				if winner_here:
-					return True
+		for x in range(self.width):
+			for y in range(self.height):
+				# Quick precheck
+				if self.board[y, x] != tile:
+					continue
 
-		# Check vertical
-		for y in range(self.height - self.n_in_row + 1):
-			for x in range(self.width):
-				winner_here = True
-				for pos in range(self.n_in_row):
-					if not self.board[y + pos, x] == tile:
-						winner_here = False
-				if winner_here:
-					return True
+				# Check horizontal:
+				if x <= self.width - self.n_in_row:
+					winner_here = True
+					for pos in range(self.n_in_row):
+						if not self.board[y, x + pos] == tile:
+							winner_here = False
+							break
+					if winner_here:
+						return True
 
-		# Check diagonal \
-		for y in range(self.height - self.n_in_row + 1):
-			for x in range(self.width - self.n_in_row + 1):
-				winner_here = True
-				for pos in range(self.n_in_row):
-					if not self.board[y + pos, x + pos] == tile:
-						winner_here = False
-				if winner_here:
-					return True
+				# Check vertical
+				if y <= self.height - self.n_in_row:
+					winner_here = True
+					for pos in range(self.n_in_row):
+						if not self.board[y + pos, x] == tile:
+							winner_here = False
+							break
+					if winner_here:
+						return True
 
-		# Check diagonal /
-		for y in range(self.height - self.n_in_row + 1):
-			for x in range(self.n_in_row - 1, self.width):
-				winner_here = True
-				for pos in range(self.n_in_row):
-					if not self.board[y + pos, x - pos] == tile:
-						winner_here = False
-				if winner_here:
-					return True
+				# Check diagonal \
+				if y <= self.height - self.n_in_row:
+					if x <= self.width - self.n_in_row:
+						winner_here = True
+						for pos in range(self.n_in_row):
+							if not self.board[y + pos, x + pos] == tile:
+								winner_here = False
+								break
+						if winner_here:
+							return True
+
+				# Check diagonal /
+				if y <= self.height - self.n_in_row:
+					if x >= self.n_in_row - 1:
+						winner_here = True
+						for pos in range(self.n_in_row):
+							if not self.board[y + pos, x - pos] == tile:
+								winner_here = False
+								break
+						if winner_here:
+							return True
 		return False
 
 	def get_copy_board(self):
@@ -136,3 +145,12 @@ class Game:
 		column = np.random.randint(0, self.width)
 		self.move(column, tile)
 		return column
+
+
+if __name__ == '__main__':
+	import time
+	game = Game()
+	start = time.time()
+	for i in range(12000):
+		game.is_winner(1)
+	print(time.time() - start)

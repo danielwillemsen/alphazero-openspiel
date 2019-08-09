@@ -16,15 +16,15 @@ class Trainer:
 		self.board_width = 5
 		self.board_height = 5
 		self.n_in_row = 3
-		self.n_games_per_generation = 10
+		self.n_games_per_generation = 25
 		self.batches_per_generation = 1000
 		self.n_games_buffer = 2000
 		self.buffer = []
-		self.n_tests_full = 3
+		self.n_tests_full = 10
 		self.n_tests_net = 250
 		self.use_gpu = True
-		self.batch_size = 2
-
+		self.batch_size = 4
+		self.lr = 0.0001
 		self.criterion_policy = nn.BCELoss()
 		self.criterion_value = nn.MSELoss()
 
@@ -39,17 +39,12 @@ class Trainer:
 		self.current_net = Net(width=self.board_width, height=self.board_height, device=self.device)
 		self.current_net.to(self.device)
 
-		self.generator = ExampleGenerator(self.current_net, board_width=self.board_width,
-										board_height=self.board_height,
-										n_in_row=self.n_in_row,
-										use_gpu=self.use_gpu)
-
 		self.current_agent = MCTSAgent(self.current_net.predict,
 										board_width=self.board_width,
 										board_height=self.board_height,
 										n_in_row=self.n_in_row,
 										use_gpu = self.use_gpu)
-		self.optimizer = torch.optim.Adam(self.current_net.parameters(), lr=0.001, weight_decay=0.0001)
+		self.optimizer = torch.optim.Adam(self.current_net.parameters(), lr=self.lr, weight_decay=0.0001)
 
 	def test_vs_random(self):
 		print("Testing")
@@ -103,12 +98,15 @@ class Trainer:
 		self.optimizer.step()
 		return loss
 
-	def train_network(self):
-		# @todo add support for batches > 1
+	def train_network(self, n_batches):
+		"""Trains the neural network for batches_per_generation batches
+
+		@return:
+		"""
 		print("Training Network")
 		flattened_buffer = [sample for game in self.buffer for sample in game]
 		loss_tot = 0
-		for i in range(self.batches_per_generation):
+		for i in range(n_batches):
 			loss = self.net_step(flattened_buffer)
 			loss_tot += loss
 			if i % 200 == 0:
@@ -116,22 +114,36 @@ class Trainer:
 				loss_tot = 0
 
 	def generate_examples(self, n_games):
+		"""Generates games in a multithreaded way.
+
+		@param n_games:
+		@return:
+		"""
 		# Generate new training samples
-		print("Generating Data")
-		start = time.time()
-		for i in range(n_games):
-			print("Game " + str(i) + " / " + str(n_games))
-			examples = self.current_agent.play_game_self()
-			self.buffer.append(examples)
-		print("Finished Generating Data (normal)")
-		print(time.time()-start)
+		# print("Generating Data")
+		# start = time.time()
+		# for i in range(n_games):
+		# 	print("Game " + str(i) + " / " + str(n_games))
+		# 	examples = self.current_agent.play_game_self()
+		# 	self.buffer.append(examples)
+		# print("Finished Generating Data (normal)")
+		# print(time.time()-start)
 
 		start = time.time()
-		self.generator.generate_examples(n_games)
-		print("Finished Generating Data (threaded)")
-		print(time.time()-start)
+		# Generate the examples
+		generator = ExampleGenerator(self.current_net, board_width=self.board_width,
+										board_height=self.board_height,
+										n_in_row=self.n_in_row,
+										use_gpu=self.use_gpu)
+		games = generator.generate_examples(n_games)
+
+		# Add examples to buffer
+		for examples in games:
+			self.buffer.append(examples)
+		print("Finished Generating Data (threaded). Took: " + str(time.time()-start) + " seconds")
+
 		# Remove oldest entries from buffer if too long
-		if len(self.buffer)>self.n_games_buffer:
+		if len(self.buffer) > self.n_games_buffer:
 			print("Buffer full. Deleting oldest samples.")
 			while len(self.buffer) > self.n_games_buffer:
 				del self.buffer[0]
@@ -140,7 +152,7 @@ class Trainer:
 		self.test_vs_random()
 		while True:
 			self.generate_examples(self.n_games_per_generation)
-			self.train_network()
+			self.train_network(self.batches_per_generation)
 			self.current_agent = MCTSAgent(self.current_net.predict,
 											board_width=self.board_width,
 											board_height=self.board_height,

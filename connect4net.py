@@ -11,8 +11,8 @@ class Net(nn.Module):
 		self.device = kwargs.get('device', torch.device('cpu'))
 		self.time1 = time.time()
 		self.conv1 = nn.Conv2d(3, 50, (4, 4), padding=1)
-		self.conv2 = nn.Conv2d(50, 50, (4, 4), padding=2)
-		self.conv3 = nn.Conv2d(50, 50, (4, 4), padding=1)
+		#self.conv2 = nn.Conv2d(50, 50, (4, 4), padding=2)
+		#self.conv3 = nn.Conv2d(50, 50, (4, 4), padding=1)
 		#self.conv4 = nn.Conv2d(50, 50, (4, 4), padding=2)
 		#self.conv5 = nn.Conv2d(50, 50, (4, 4), padding=1)
 		self.conv6 = nn.Conv2d(50, 50, (4, 4), padding=1)
@@ -29,13 +29,13 @@ class Net(nn.Module):
 		@return: Policy tensor and value tensor
 		"""
 		x = F.leaky_relu(self.conv1(x))
-		x = F.leaky_relu(self.conv2(x))
-		x = F.leaky_relu(self.conv3(x))
+		#x = F.leaky_relu(self.conv2(x))
+		#x = F.leaky_relu(self.conv3(x))
 		#x = F.leaky_relu(self.conv4(x))
 		#x = F.leaky_relu(self.conv5(x))
 		x = F.leaky_relu(self.conv6(x))
 
-		x = x.view(-1,(self.height-2) * (self.width-2) * 50)
+		x = x.view(-1, (self.height-2) * (self.width-2) * 50)
 		x = F.leaky_relu(self.fc1(x))
 		x = self.fc2(x)
 		xp, v = x.split(self.width, 1)
