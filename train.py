@@ -13,18 +13,18 @@ from mctsagent import MCTSAgent
 class Trainer:
 	def __init__(self):
 
-		self.board_width = 5
-		self.board_height = 5
-		self.n_in_row = 3
-		self.n_games_per_generation = 25
+		self.board_width = 7
+		self.board_height = 6
+		self.n_in_row = 4
+		self.n_games_per_generation = 50
 		self.batches_per_generation = 1000
 		self.n_games_buffer = 2000
 		self.buffer = []
 		self.n_tests_full = 10
 		self.n_tests_net = 250
 		self.use_gpu = True
-		self.batch_size = 4
-		self.lr = 0.0001
+		self.batch_size = 16
+		self.lr = 0.0002
 		self.criterion_policy = nn.BCELoss()
 		self.criterion_value = nn.MSELoss()
 
