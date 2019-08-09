@@ -12,7 +12,10 @@ from mctsagent import MCTSAgent
 
 class Trainer:
 	def __init__(self):
-
+		self.name = "initial"
+		self.model_path = "models/"
+		self.save = True
+		self.save_n_gens = 5
 		self.board_width = 7
 		self.board_height = 6
 		self.n_in_row = 4
@@ -150,7 +153,9 @@ class Trainer:
 
 	def run(self):
 		self.test_vs_random()
+		generation = 0
 		while True:
+			generation += 1
 			self.generate_examples(self.n_games_per_generation)
 			self.train_network(self.batches_per_generation)
 			self.current_agent = MCTSAgent(self.current_net.predict,
@@ -158,6 +163,12 @@ class Trainer:
 											board_height=self.board_height,
 											n_in_row=self.n_in_row)
 			self.test_vs_random()
+
+			# Periodically save network
+			if self.save and generation%self.save_n_gens == 0:
+				print("Saving network")
+				torch.save(self.current_net.state_dict(), self.model_path + self.name + str(generation) + ".pth")
+				print("Network saved")
 
 
 if __name__ == '__main__':

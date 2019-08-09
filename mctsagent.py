@@ -108,3 +108,35 @@ class MCTSAgent:
 			return -1
 		else:
 			return 0
+
+	def play_game_vs_human_net_only(self):
+		"""Play a game using against a human opponent, whilst selecting optimal moves purely based on NN
+
+		@return:
+		"""
+		game = Game(width=self.board_width, height=self.board_height, n_in_row=self.n_in_row)
+
+		# Randomly select starting player
+		print(game.board)
+		if np.random.randint(0, 2) == 1:
+			game.move(int(input("enter column...")), 2)
+
+		# Play game
+		while not game.is_terminal():
+			print(game.board)
+			policy, value = self.policy_fn(game)
+			action = self.select_move_optimal(policy)
+			game.move(action, 1)
+			print(game.board)
+			if not game.is_terminal():
+				game.move(int(input("enter column...")), 2)
+				print(game.board)
+
+		print(game.board)
+
+		if game.is_winner(1):
+			return 1
+		if game.is_winner(2):
+			return -1
+		else:
+			return 0
