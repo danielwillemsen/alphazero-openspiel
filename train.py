@@ -152,12 +152,15 @@ class Trainer:
 				del self.buffer[0]
 
 	def run(self):
+		self.current_net.eval()
 		self.test_vs_random()
 		generation = 0
 		while True:
 			generation += 1
 			self.generate_examples(self.n_games_per_generation)
+			self.current_net.train()
 			self.train_network(self.batches_per_generation)
+			self.current_net.eval()
 			self.current_agent = MCTSAgent(self.current_net.predict,
 											board_width=self.board_width,
 											board_height=self.board_height,
