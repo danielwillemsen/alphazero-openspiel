@@ -14,7 +14,7 @@ class Game:
 		self.width = int(kwargs.get('width', 7))
 		self.height = int(kwargs.get('height', 6))
 		self.n_in_row = int(kwargs.get('n_in_row', 4))
-		self.moves_max = kwargs.get('moves_max', 50)
+		self.moves_max = kwargs.get('moves_max', self.height * self.width)
 
 		self.moves = []
 		self.board = np.zeros((self.height, self.width))
@@ -126,14 +126,22 @@ class Game:
 		@param tile: (int) Color of player (either 1 or 2)
 		@return:
 		"""
-		y = 0
-		while y < self.height:
-			if self.board[y, column] == 0:
-				self.board[y, column] = tile
-				self.moves.append(column)
-				return
-			y = y + 1
-		self.moves.append(-1)		# indicating that an invalid move has been attempted
+		ind = 0
+		in_column = column
+		while ind < self.width:
+			y = 0
+			while y < self.height:
+				if self.board[y, column] == 0:
+					self.board[y, column] = tile
+					self.moves.append(column)
+					return
+				y = y + 1
+			ind = ind + 1
+			column = (in_column + ind) % self.width
+		# indicating that an invalid move has been attempted
+		print("Warning: Unable to do move, board is full.")
+		print(self.board)
+		self.moves.append(-1)
 		return
 
 	def move_random(self, tile):
