@@ -72,24 +72,30 @@ class MCTS:
 		self.root = Node(None, 0.0)
 		self.policy_fn = policy_fn
 
-	def playout(self, game):
+	def playout(self, state):
 		"""
 
-		@param game: Should be a copy of the game as it is modified in place.
+		@param state: Should be a copy of the state as it is modified in place.
 		@return:
 		"""
 		node = self.root
 
 		# Selection
-		while not node.is_leaf():
+		current_player = state.current_player()
+		while not node.is_leaf() and not state.is_terminal():
 			node, action = node.select(self.c_puct)
-			game.move(action, 1)
-			game.invert_board()
+			# @todo make this nicer
+			while action not in state.legal_actions():
+				action += 1
+				if action == 7:
+					action = 0
+			current_player = state.current_player()
+			state.apply_action(action)
 
 		# Expansion
-		if not game.is_terminal():
+		if not state.is_terminal():
 			# @todo add possibility of using simulation instead of neural net prediction (for pure MCTS)
-			prior_ps, leaf_value = self.policy_fn(game)
+			prior_ps, leaf_value = self.policy_fn(state)
 
 			# Add dirichlet noise @todo check if this is the correct location for dirichlet noise
 			if self.use_dirichlet:
@@ -97,12 +103,7 @@ class MCTS:
 
 			node.expand(prior_ps)
 		else:
-			if game.is_winner(1):
-				leaf_value = 1
-			elif game.is_winner(2):
-				leaf_value = -1
-			else:
-				leaf_value = 0
+			leaf_value = -state.player_return(current_player)
 
 		# Back propagation
 		# @todo check if this minus sign here makes sense
@@ -118,10 +119,10 @@ class MCTS:
 		visits = [child.N for child in self.root.children]
 		return [float(visit)/sum(visits) for visit in visits]
 
-	def search(self, game):
+	def search(self, state):
 		for i in range(self.n_playouts):
-			game_copy = copy.deepcopy(game)
-			self.playout(game_copy)
+			state_copy = state.clone()
+			self.playout(state_copy)
 		return self.get_action_probabilities()
 
 	def update_root(self, action):

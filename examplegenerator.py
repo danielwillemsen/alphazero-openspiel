@@ -5,7 +5,8 @@ import threading
 import torch
 import numpy as np
 import time
-
+from alphazerobot import AlphaZeroBot
+import pyspiel
 
 class ExampleGenerator:
 	def __init__(self, net, **kwargs):
@@ -21,13 +22,13 @@ class ExampleGenerator:
 		self.v = dict()
 		return
 
-	def evaluate_nn(self, game):
+	def evaluate_nn(self, state):
 		"""
 
 		@param game: The game which needs to be evaluated
 		@return: pi: policy according to neural net, vi: value according to neural net.
 		"""
-		board = game.get_board_for_nn()
+		board = self.net.state_to_board(state)
 		id = hash(board.tostring())
 		with self.gpu_lock:
 			self.gpu_queue[id] = board
@@ -69,11 +70,38 @@ class ExampleGenerator:
 		return
 
 	def generate_game(self):
-		mcts = MCTSAgent(self.evaluate_nn, **self.kwargs)
-		example = mcts.play_game_self()
+		example = self.play_game_self(self.evaluate_nn)
 		with self.examples_lock:
 			self.examples.append(example)
 		return
+
+	def play_game_self(self, policy_fn):
+		examples = []
+		game = pyspiel.load_game('connect_four')
+		state = game.new_initial_state()
+		alphazero_bot = AlphaZeroBot(game, 0, policy_fn, self_play=True)
+		while not state.is_terminal():
+			policy, action = alphazero_bot.step(state)
+			policy_dict = dict(policy)
+			policy_list = []
+			for i in range(7):
+				# Create a policy list. To be used in the net instead of a list of tuples.
+				policy_list.append(policy_dict.get(i, 0.0))
+
+			if sum(policy_list) > 0.0:
+				# Normalize policy after taking out illegal moves
+				policy_list = [item / sum(policy_list) for item in policy_list]
+			else:
+				policy_list = [1.0 / len(policy_list) for item in policy_list]
+
+			examples.append([state.information_state(), Net.state_to_board(state), policy_list, None])
+			state.apply_action(action)
+		# Get return for starting player
+		reward = state.returns()[0]
+		for i in range(len(examples)):
+			examples[i][3] = reward
+			reward *= -1
+		return examples
 
 	def generate_examples(self, n_games):
 		"""Creates threads with MCTSAgents who play one game each. They send neural network evaluation requests to the
@@ -104,7 +132,8 @@ class ExampleGenerator:
 
 if __name__ == '__main__':
 	net = Net()
+	net.eval()
 	generator = ExampleGenerator(net)
 	start = time.time()
-	generator.generate_examples(5)
+	generator.generate_examples(1)
 	print(time.time()-start)
