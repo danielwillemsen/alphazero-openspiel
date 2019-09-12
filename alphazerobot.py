@@ -14,7 +14,13 @@ def remove_illegal_actions(action_probabilities, legal_actions):
     legal_actions_arr = np.zeros(action_probabilities.shape, dtype=bool)
     legal_actions_arr[legal_actions] = True
     action_probabilities[~legal_actions_arr] = 0.0
-    action_probabilities = action_probabilities / sum(action_probabilities)
+
+    # Check if any of the legal actions actually does have a probability >0.
+    if sum(action_probabilities) > 1e-6:
+        action_probabilities = action_probabilities / sum(action_probabilities)
+    else:
+        action_probabilities = np.zeros(len(action_probabilities))
+        action_probabilities[legal_actions] = 1./len(legal_actions)
     return action_probabilities
 
 
