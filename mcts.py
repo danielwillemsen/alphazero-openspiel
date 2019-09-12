@@ -24,13 +24,14 @@ class Node:
     def is_root(self):
         return self.parent is None
 
-    def select(self, c_puct):
+    def select(self, c_puct, legal_actions):
         """Select the child with highest values (non-noisy at this moment)
 
         @param c_puct: (float) coefficient for exploration.
+        @param legal_actions: (list) of all legal actions
         @return:
         """
-        value_list = [child.get_value(c_puct) for child in self.children]
+        value_list = [self.children[i].get_value(c_puct) if i in legal_actions else -float('inf') for i in range(len(self.children))]
         action = int(np.argmax(value_list))
         child = self.children[action]
         return child, np.argmax(value_list)
@@ -84,13 +85,8 @@ class MCTS:
         # Selection
         current_player = state.current_player()
         while not node.is_leaf() and not state.is_terminal():
-            node, action = node.select(self.c_puct)
-            # @todo make this nicer
-            while action not in state.legal_actions():
-                action += 1
-                if action == 7:
-                    action = 0
             current_player = state.current_player()
+            node, action = node.select(self.c_puct, state.legal_actions(current_player))
             state.apply_action(action)
 
         # Expansion
@@ -104,6 +100,9 @@ class MCTS:
         # @todo check if this minus sign here makes sense
         node.update_recursive(-leaf_value)
         return
+
+    def notlegal(self):
+        notlegal = 1
 
     def get_action_probabilities(self):
         """For now simply linear with the amount of visits.
