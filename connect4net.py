@@ -15,10 +15,10 @@ class Net(nn.Module):
 		self.height = int(kwargs.get('height', 6))
 		self.device = kwargs.get('device', torch.device('cpu'))
 		self.time1 = time.time()
-		#self.conv1 = nn.Conv2d(3, 50, (3), padding=1)
-		#self.bn1 = nn.BatchNorm2d(50)
-		#self.conv2 = nn.Conv2d(50, 50, (3), padding=1)
-		#self.bn2 = nn.BatchNorm2d(50)
+		self.conv1 = nn.Conv2d(3, 50, (3), padding=1)
+		self.bn1 = nn.BatchNorm2d(50)
+		self.conv2 = nn.Conv2d(50, 50, (3), padding=1)
+		self.bn2 = nn.BatchNorm2d(50)
 		#self.conv3 = nn.Conv2d(50, 50, (3), padding=1)
 		#self.bn3 = nn.BatchNorm2d(50)
 		#self.conv4 = nn.Conv2d(50, 50, (3), padding=1)
@@ -27,8 +27,8 @@ class Net(nn.Module):
 		#self.bn5 = nn.BatchNorm2d(50)
 		#self.conv6 = nn.Conv2d(50, 50, (4, 4), padding=1)
 		#self.bn6 = nn.BatchNorm2d(50)
-		self.fc1 = nn.Linear((self.height) * (self.width)*3, 100)
-		#self.fc1_bn = nn.BatchNorm1d(100)
+		self.fc1 = nn.Linear((self.height) * (self.width)* 50, 100)
+		self.fc1_bn = nn.BatchNorm1d(100)
 		self.fc2 = nn.Linear(100, self.width + 1)
 		return
 
@@ -38,15 +38,15 @@ class Net(nn.Module):
 		@param x: input tensor
 		@return: Policy tensor and value tensor
 		"""
-		#x = F.leaky_relu(self.bn1(self.conv1(x)))
-		#x = F.leaky_relu(self.bn2(self.conv2(x)))
+		x = F.leaky_relu(self.bn1(self.conv1(x)))
+		x = F.leaky_relu(self.bn2(self.conv2(x)))
 		#x = F.leaky_relu(self.bn3(self.conv3(x)))
 		#x = F.leaky_relu(self.bn4(self.conv4(x)))
 		#x = F.leaky_relu(self.bn5(self.conv5(x)))
 		#x = F.leaky_relu(self.bn6(self.conv6(x)))
 
-		x = x.view(-1, (self.height) * (self.width) *3)
-		x = F.leaky_relu((self.fc1(x)))
+		x = x.view(-1, (self.height) * (self.width) * 50)
+		x = F.leaky_relu(self.fc1_bn(self.fc1(x)))
 		x = self.fc2(x)
 		xp, v = x.split(self.width, 1)
 		return F.softmax(xp), F.tanh(v)
@@ -74,25 +74,8 @@ class Net(nn.Module):
 		:param state: openspiel state representation of the board
 		:return: neural network suitable representation of the board
 		"""
-		board = np.zeros((3, 6, 7))
-		state_split = state.information_state().split()
-		for row in range(len(state_split)):
-			row_data = state_split[row]
-			for col in range(len(row_data)):
-				item = row_data[col]
-				if state.current_player() == 0:
-					if item == '.':
-						board[0, row, col] = 1.0
-					elif item == 'x':
-						board[1, row, col] = 1.0
-					elif item == 'o':
-						board[2, row, col] = 1.0
-				else:
-					if item == '.':
-						board[0, row, col] = 1.0
-					elif item == 'x':
-						board[2, row, col] = 1.0
-					elif item == 'o':
-						board[1, row, col] = 1.0
+		board = np.asarray(state.information_state_as_normalized_vector()).reshape((3, 6, 7))
+		if state.current_player() == 0:
+			board[[2, 1]] = board[[1, 2]]
 		board = np.flip(board, 1).copy()
 		return board

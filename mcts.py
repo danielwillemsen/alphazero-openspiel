@@ -131,4 +131,8 @@ class MCTS:
 		@param action: (int) action taht
 		@return:
 		"""
-		self.root = self.root.children[action]
+		if self.root.is_leaf():
+			self.root = Node(None, 0.0)
+		else:
+			self.root = self.root.children[action]
+

@@ -33,11 +33,11 @@ class Trainer:
 		self.board_width = 7
 		self.board_height = 6
 		self.n_in_row = 4
-		self.n_games_per_generation = 25
-		self.batches_per_generation = 10000
+		self.n_games_per_generation = 50
+		self.batches_per_generation = 2500
 		self.n_games_buffer = 5000
 		self.buffer = []
-		self.n_tests_full = 10
+		self.n_tests = 10
 		self.n_tests_net = 250
 		self.use_gpu = True
 		self.batch_size = 16
@@ -283,54 +283,53 @@ class Trainer:
 		start = time.time()
 		print("Testing...")
 		self.test_data['games_played'].append(self.games_played)
-		n_tests = 1
 		score_tot = 0.
-		for i in range(n_tests):
+		for i in range(self.n_tests):
 			score1, score2 = self.test_zero_vs_random()
 			score_tot += score1
 			score_tot += score2
-		avg = score_tot/(2*n_tests)
+		avg = score_tot/(2*self.n_tests)
 		#self.test_data = {'n_games': [], 'zero_vs_random': [], 'zero_vs_mcts100': [], 'zero_vs_mcts200': [], 'net_vs_random': [], 'net_vs_mcts100': [], 'net_vs_mcts200': []}
 		self.test_data['zero_vs_random'].append(avg)
 		print("Average score vs random:" + str(avg))
 		score_tot = 0.
-		for i in range(n_tests):
+		for i in range(self.n_tests):
 			score1, score2 = self.test_net_vs_random()
 			score_tot += score1
 			score_tot += score2
-		avg = score_tot/(2*n_tests)
+		avg = score_tot/(2*self.n_tests)
 		self.test_data['net_vs_random'].append(avg)
 		print("Average score vs random (net only):" + str(avg))
 		score_tot = 0.
-		for i in range(n_tests):
+		for i in range(self.n_tests):
 			score1, score2 = self.test_zero_vs_mcts(100)
 			score_tot += score1
 			score_tot += score2
-		avg = score_tot/(2*n_tests)
+		avg = score_tot/(2*self.n_tests)
 		self.test_data['zero_vs_mcts100'].append(avg)
 		print("Average score vs mcts100:" + str(avg))
 		score_tot = 0.
-		for i in range(n_tests):
+		for i in range(self.n_tests):
 			score1, score2 = self.test_net_vs_mcts(100)
 			score_tot += score1
 			score_tot += score2
-		avg = score_tot/(2*n_tests)
+		avg = score_tot/(2*self.n_tests)
 		self.test_data['net_vs_mcts100'].append(avg)
 		print("Average score vs mcts100 (net only):" + str(avg))
 		score_tot = 0.
-		for i in range(n_tests):
+		for i in range(self.n_tests):
 			score1, score2 = self.test_zero_vs_mcts(100)
 			score_tot += score1
 			score_tot += score2
-		avg = score_tot/(2*n_tests)
+		avg = score_tot/(2*self.n_tests)
 		self.test_data['zero_vs_mcts200'].append(avg)
 		print("Average score vs mcts200:" + str(avg))
 		score_tot = 0.
-		for i in range(n_tests):
+		for i in range(self.n_tests):
 			score1, score2 = self.test_net_vs_mcts(100)
 			score_tot += score1
 			score_tot += score2
-		avg = score_tot/(2*n_tests)
+		avg = score_tot/(2*self.n_tests)
 		self.test_data['net_vs_mcts200'].append(avg)
 		print("Average score vs mcts200 (net only):" + str(avg))
 		with open("logs/" + self.start_time + str(self.name) + ".p", 'wb') as f:
