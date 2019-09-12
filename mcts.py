@@ -72,6 +72,8 @@ class MCTS:
 		self.root = Node(None, 0.0)
 		self.policy_fn = policy_fn
 
+
+
 	def playout(self, state):
 		"""
 
@@ -94,13 +96,7 @@ class MCTS:
 
 		# Expansion
 		if not state.is_terminal():
-			# @todo add possibility of using simulation instead of neural net prediction (for pure MCTS)
 			prior_ps, leaf_value = self.policy_fn(state)
-
-			# Add dirichlet noise @todo check if this is the correct location for dirichlet noise
-			if self.use_dirichlet:
-				prior_ps = (0.8 * np.array(prior_ps) + 0.2 * np.random.dirichlet(0.3 * np.ones(len(prior_ps)))).tolist()
-
 			node.expand(prior_ps)
 		else:
 			leaf_value = -state.player_return(current_player)
@@ -120,10 +116,20 @@ class MCTS:
 		return [float(visit)/sum(visits) for visit in visits]
 
 	def search(self, state):
+		# Expand the root with dirichlet noise if this is the first move of the game
+		if self.use_dirichlet and not state.history():
+			self.expand_root_dirichlet(state)
+
 		for i in range(self.n_playouts):
 			state_copy = state.clone()
 			self.playout(state_copy)
 		return self.get_action_probabilities()
+
+	def expand_root_dirichlet(self, state):
+		prior_ps, leaf_value = self.policy_fn(state)
+		if self.use_dirichlet:
+			prior_ps = (0.8 * np.array(prior_ps) + 0.2 * np.random.dirichlet(0.3 * np.ones(len(prior_ps)))).tolist()
+		self.root.expand(prior_ps)
 
 	def update_root(self, action):
 		"""Updates root when new move has been performed.

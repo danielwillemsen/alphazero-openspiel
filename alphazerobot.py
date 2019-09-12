@@ -5,10 +5,18 @@ from open_spiel.python import rl_environment
 from open_spiel.python.algorithms import random_agent
 import numpy as np
 import pyspiel
-import matplotlib.pyplot as plt
 from mcts import MCTS
 
 from open_spiel.python.algorithms import mcts
+
+
+def remove_illegal_actions(action_probabilities, legal_actions):
+    legal_actions_arr = np.zeros(action_probabilities.shape, dtype=bool)
+    legal_actions_arr[legal_actions] = True
+    action_probabilities[~legal_actions_arr] = 0.0
+    action_probabilities = action_probabilities / sum(action_probabilities)
+    return action_probabilities
+
 
 class AlphaZeroBot(pyspiel.Bot):
     """Bot which uses a combination of MCTS and a policy value net to calculate a move.
@@ -38,20 +46,25 @@ class AlphaZeroBot(pyspiel.Bot):
         # Create a new MCTS search tree
         else:
             self.mcts = MCTS(self.policy_fn, **self.kwargs)
-        policy = []
+
+        # Perform the MCTS
+        action_probabilities = np.array(self.mcts.search(state))
+
+        # Remove illegal actions
         legal_actions = state.legal_actions(state.current_player())
-        action_probabilities = self.mcts.search(state)
-        for action in legal_actions:
-            policy.append((action, action_probabilities[action]))
+        action_probabilities = remove_illegal_actions(action_probabilities, legal_actions)
+
+        # Select the action, either probabilitically or simply the best.
         if self.self_play:
             action = np.random.choice(len(action_probabilities), p=action_probabilities)
         else:
             action = np.argmax(action_probabilities)
-        # @todo fix this
-        while action not in state.legal_actions():
-            action += 1
-            if action == 7:
-                action = 0
+
+        # This format is needed for the bot API
+        policy = []
+        for act in legal_actions:
+            policy.append((act, action_probabilities[act]))
+
         return policy, action
 
 
@@ -66,18 +79,19 @@ class NeuralNetBot(pyspiel.Bot):
 
     def step(self, state):
         ps, v = self.net.predict(state)
-        policy = []
-        legal_actions = state.legal_actions(self.player_id())
-        mcts_action = np.argmax(ps)
-        while mcts_action not in state.legal_actions():
-            mcts_action += 1
-            if mcts_action == 7:
-                mcts_action = 0
-        for action in legal_actions:
-            p = 1.0 if action == mcts_action else 0.0
-            policy.append((action, p))
+        action_probabilities = np.array(ps)
 
-        return policy, mcts_action
+        # Remove illegal actions
+        legal_actions = state.legal_actions(state.current_player())
+        action_probabilities = remove_illegal_actions(action_probabilities, legal_actions)
+        action = np.argmax(action_probabilities)
+
+        # This format is needed for the bot API
+        policy = []
+        for act in legal_actions:
+            policy.append((act, action_probabilities[act]))
+
+        return policy, action
 
 def test():
     game = pyspiel.load_game('connect_four')
@@ -91,7 +105,7 @@ def test():
     mcts_bot = mcts.MCTSBot(game, 1-zero_num, uct_c,
                             max_search_nodes, evaluator)
     # Create random bot
-    zero_bot = pyspiel.make_uniform_random_bot(game, 1 - mcts_player, 123)
+    zero_bot = pyspiel.make_uniform_random_bot(game, zero_num, 123)
     connect_four_net = Net()
     connect_four_net.load_state_dict(torch.load("models/bigwoskipping350.pth", map_location='cpu'))
     #mcts_bot = NeuralNetBot(game, 1-zero_num, connect_four_net)
@@ -116,6 +130,7 @@ def test():
     for pid in range(game.num_players()):
         print("Return for player {} is {}".format(pid, returns[pid]))
     print("return for alphaZero: " + str(zero_num+1) + "amount:"+ str(returns[zero_num]))
+
 
 if __name__ == "__main__":
     test()
