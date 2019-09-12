@@ -3,8 +3,8 @@ from connect4net import Net
 from mctsagent import MCTSAgent
 
 if __name__ == '__main__':
-	net = Net()
-	net.load_state_dict(torch.load("models/example_model.pth", map_location='cpu'))
-	net.eval()
-	mctsagent = MCTSAgent(net.predict)
-	mctsagent.play_game_vs_human_net_only()
+    net = Net()
+    net.load_state_dict(torch.load("models/example_model.pth", map_location='cpu'))
+    net.eval()
+    mctsagent = MCTSAgent(net.predict)
+    mctsagent.play_game_vs_human_net_only()

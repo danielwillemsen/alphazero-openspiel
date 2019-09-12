@@ -13,7 +13,7 @@ def remove_illegal_actions(action_probabilities, legal_actions):
         action_probabilities = action_probabilities / sum(action_probabilities)
     else:
         action_probabilities = np.zeros(len(action_probabilities))
-        action_probabilities[legal_actions] = 1./len(legal_actions)
+        action_probabilities[legal_actions] = 1. / len(legal_actions)
     return action_probabilities
 
 
@@ -21,6 +21,7 @@ class AlphaZeroBot(pyspiel.Bot):
     """Bot which uses a combination of MCTS and a policy value net to calculate a move.
 
     """
+
     def __init__(self, game, player, policy_fn, self_play=False, keep_search_tree=True, **kwargs):
         super(AlphaZeroBot, self).__init__(game, player)
         self.policy_fn = policy_fn
@@ -71,6 +72,7 @@ class NeuralNetBot(pyspiel.Bot):
     """Bot which uses a combination of MCTS and a policy value net to calculate a move.
 
     """
+
     def __init__(self, game, player, net):
         super(NeuralNetBot, self).__init__(game, player)
         self.net = net
