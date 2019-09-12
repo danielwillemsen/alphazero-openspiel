@@ -5,8 +5,6 @@ This code is inspired by the MCTS implementation of Junxiao Song
 """
 
 import numpy as np
-import copy
-
 
 class Node:
 	"""MTCS Node

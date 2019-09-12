@@ -1,13 +1,6 @@
-import torch
-from connect4net import Net
-from open_spiel.python import rl_agent
-from open_spiel.python import rl_environment
-from open_spiel.python.algorithms import random_agent
 import numpy as np
 import pyspiel
 from mcts import MCTS
-
-from open_spiel.python.algorithms import mcts
 
 
 def remove_illegal_actions(action_probabilities, legal_actions):
@@ -98,76 +91,3 @@ class NeuralNetBot(pyspiel.Bot):
             policy.append((act, action_probabilities[act]))
 
         return policy, action
-
-def test():
-    game = pyspiel.load_game('connect_four')
-    state = game.new_initial_state()
-    print("Initial state: ", str(state))
-    zero_num = 0
-    uct_c = 2
-    max_search_nodes = 300
-    # Create MCTS bot
-    evaluator = mcts.RandomRolloutEvaluator(1)
-    mcts_bot = mcts.MCTSBot(game, 1-zero_num, uct_c,
-                            max_search_nodes, evaluator)
-    # Create random bot
-    zero_bot = pyspiel.make_uniform_random_bot(game, zero_num, 123)
-    connect_four_net = Net()
-    connect_four_net.load_state_dict(torch.load("models/bigwoskipping350.pth", map_location='cpu'))
-    #mcts_bot = NeuralNetBot(game, 1-zero_num, connect_four_net)
-
-    zero_bot = AlphaZeroBot(game, zero_num, connect_four_net)
-
-    if zero_num == 1:
-        bots = [mcts_bot, zero_bot]
-    else:
-        bots = [zero_bot, mcts_bot]
-
-    while not state.is_terminal():
-        # Decision node: sample action for the single current player
-        policy, action = bots[state.current_player()].step(state)
-        print("Player ", state.current_player(), ", randomly sampled action: ",
-                  state.action_to_string(state.current_player(), action))
-        state.apply_action(action)
-        print("Next state: ", str(state))
-
-    # Game is now done. Print return for each player
-    returns = state.returns()
-    for pid in range(game.num_players()):
-        print("Return for player {} is {}".format(pid, returns[pid]))
-    print("return for alphaZero: " + str(zero_num+1) + "amount:"+ str(returns[zero_num]))
-
-
-if __name__ == "__main__":
-    test()
-    # game = pyspiel.load_game('connect_four')
-    # state = game.new_initial_state()
-    # print("Initial state: ", str(state))
-    # mcts_player = 0
-    # uct_c = 2
-    # max_search_nodes = 100
-    # # Create MCTS bot
-    # evaluator = mcts.RandomRolloutEvaluator(10)
-    # mcts_bot = mcts.MCTSBot(game, mcts_player, uct_c,
-    #                         max_search_nodes, evaluator)
-    # random_bot = NetBot(game, 0)
-    #
-    # # Create random bot
-    # # random_bot = pyspiel.make_uniform_random_bot(game, 1 - mcts_player, 123)
-    # state.apply_action(0)
-    # state.apply_action(1)
-    # state.apply_action(0)
-    # state.apply_action(1)
-    # state.apply_action(0)
-    # _, action = random_bot.step(state)
-    # print("Player ", state.current_player(), ", randomly sampled action: ",
-    #       state.action_to_string(state.current_player(), action))
-    # state.apply_action(action)
-    # print(str(state))
-    # _, action = random_bot.step(state)
-    # print("Player ", state.current_player(), ", randomly sampled action: ",
-    #       state.action_to_string(state.current_player(), action))
-    # state.apply_action(action)
-    # print(str(state))
-    #
-    #

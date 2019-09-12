@@ -1,27 +1,17 @@
-import random
 import torch
 import torch.nn as nn
-import copy
 import numpy as np
 import time
 import pickle
+from datetime import datetime
+import pyspiel
+from open_spiel.python.algorithms import mcts
 
 from examplegenerator import ExampleGenerator
 from connect4net import Net
 from mctsagent import MCTSAgent
 from alphazerobot import AlphaZeroBot, NeuralNetBot
-import pyspiel
-from open_spiel.python.algorithms import mcts
-import functools
-from datetime import datetime
 
-def average10_decorator(f):
-	def averager(*args):
-		outcomes = []
-		for i in range(10):
-			outcomes.append(f(*args))
-		return outcomes
-	return averager
 
 class Trainer:
 	def __init__(self):
@@ -33,15 +23,14 @@ class Trainer:
 		self.board_width = 7
 		self.board_height = 6
 		self.n_in_row = 4
-		self.n_games_per_generation = 50
+		self.n_games_per_generation = 250
 		self.batches_per_generation = 2500
 		self.n_games_buffer = 5000
 		self.buffer = []
-		self.n_tests = 10
-		self.n_tests_net = 250
+		self.n_tests = 25
 		self.use_gpu = True
-		self.batch_size = 16
-		self.lr = 0.00001
+		self.batch_size = 256
+		self.lr = 0.0002
 		self.games_played = 0
 		self.criterion_policy = nn.BCELoss()
 		self.criterion_value = nn.MSELoss()
@@ -63,30 +52,6 @@ class Trainer:
 										n_in_row=self.n_in_row,
 										use_gpu = self.use_gpu)
 		self.optimizer = torch.optim.Adam(self.current_net.parameters(), lr=self.lr, weight_decay=0.0001)
-
-	def test_vs_random(self):
-		print("Testing")
-		wins = 0
-		losses = 0
-		for i in range(self.n_tests_full):
-			result = self.current_agent.play_game_vs_random()
-			if result == 1:
-				wins += 1
-			elif result == -1:
-				losses += 1
-		print("Full test: wins: " + str(float(wins)/self.n_tests_full) + " loss: " + str(
-			float(losses)/self.n_tests_full))
-		wins = 0
-		losses = 0
-		for i in range(self.n_tests_net):
-			result = self.current_agent.play_game_vs_random_net_only()
-			if result == 1:
-				wins += 1
-			elif result == -1:
-				losses += 1
-		print("Net only test: wins: " + str(float(wins) / self.n_tests_net) + " loss: " + str(
-			float(losses) / self.n_tests_net))
-		return
 
 	def net_step(self, flattened_buffer):
 		"""Samples a random batch and updates the NN parameters with this bat
@@ -127,7 +92,7 @@ class Trainer:
 		print("Removing duplciates")
 		print("Initial amount of samples: " + str(len(flattened_buffer)))
 		start = time.time()
-		#Remove duplicates
+		# Remove duplicates
 		flattened_buffer_dict = dict()
 		flattened_buffer_counts = dict()
 		for item in flattened_buffer:
@@ -201,6 +166,7 @@ class Trainer:
 		# print(time.time()-start)
 
 		start = time.time()
+
 		# Generate the examples
 		generator = ExampleGenerator(self.current_net, board_width=self.board_width,
 										board_height=self.board_height,
@@ -222,6 +188,7 @@ class Trainer:
 
 	def test_zero_vs_mcts(self, max_search_nodes):
 		game = pyspiel.load_game('connect_four')
+
 		# Alphazero first
 		zero_bot = AlphaZeroBot(game, 0, policy_fn=self.current_net.predict, use_dirichlet=False)
 		mcts_bot = mcts.MCTSBot(game, 1, 1,
@@ -289,7 +256,6 @@ class Trainer:
 			score_tot += score1
 			score_tot += score2
 		avg = score_tot/(2*self.n_tests)
-		#self.test_data = {'n_games': [], 'zero_vs_random': [], 'zero_vs_mcts100': [], 'zero_vs_mcts200': [], 'net_vs_random': [], 'net_vs_mcts100': [], 'net_vs_mcts200': []}
 		self.test_data['zero_vs_random'].append(avg)
 		print("Average score vs random:" + str(avg))
 		score_tot = 0.
@@ -318,7 +284,7 @@ class Trainer:
 		print("Average score vs mcts100 (net only):" + str(avg))
 		score_tot = 0.
 		for i in range(self.n_tests):
-			score1, score2 = self.test_zero_vs_mcts(100)
+			score1, score2 = self.test_zero_vs_mcts(200)
 			score_tot += score1
 			score_tot += score2
 		avg = score_tot/(2*self.n_tests)
@@ -326,7 +292,7 @@ class Trainer:
 		print("Average score vs mcts200:" + str(avg))
 		score_tot = 0.
 		for i in range(self.n_tests):
-			score1, score2 = self.test_net_vs_mcts(100)
+			score1, score2 = self.test_net_vs_mcts(200)
 			score_tot += score1
 			score_tot += score2
 		avg = score_tot/(2*self.n_tests)
@@ -346,11 +312,6 @@ class Trainer:
 			self.generate_examples(self.n_games_per_generation)
 			self.train_network(self.batches_per_generation)
 			self.test_agent()
-			#self.current_agent = MCTSAgent(self.current_net.predict,
-			#								board_width=self.board_width,
-			#								board_height=self.board_height,
-			#								n_in_row=self.n_in_row)
-			#self.test_vs_random()
 
 			# Periodically save network
 			if self.save and generation%self.save_n_gens == 0:
@@ -373,9 +334,5 @@ def play_game(game, player1, player2):
 
 if __name__ == '__main__':
 	trainer = Trainer()
-	#trainer.current_net.eval()
-	#trainer.play_game_self()
 	trainer.run()
-
-#trainer.run()
 

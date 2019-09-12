@@ -8,6 +8,7 @@ import time
 from alphazerobot import AlphaZeroBot
 import pyspiel
 
+
 class ExampleGenerator:
 	def __init__(self, net, **kwargs):
 		self.kwargs = kwargs
@@ -25,7 +26,7 @@ class ExampleGenerator:
 	def evaluate_nn(self, state):
 		"""
 
-		@param game: The game which needs to be evaluated
+		@param state: The game which needs to be evaluated
 		@return: pi: policy according to neural net, vi: value according to neural net.
 		"""
 		board = self.net.state_to_board(state)
@@ -75,7 +76,8 @@ class ExampleGenerator:
 			self.examples.append(example)
 		return
 
-	def play_game_self(self, policy_fn):
+	@staticmethod
+	def play_game_self(policy_fn):
 		examples = []
 		game = pyspiel.load_game('connect_four')
 		state = game.new_initial_state()
