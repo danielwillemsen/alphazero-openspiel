@@ -7,21 +7,12 @@ import numpy as np
 import time
 from alphazerobot import AlphaZeroBot
 import pyspiel
+from multiprocessing import Process, Pipe
 
-
-class ExampleGenerator:
-    def __init__(self, net, **kwargs):
-        self.kwargs = kwargs
+class Evaluator():
+    def __init__(self, net, conn):
+        self.conn = conn
         self.net = net
-        self.examples = []
-        self.examples_lock = threading.Lock()
-        self.gpu_queue = dict()
-        self.gpu_lock = threading.Lock()
-        self.gpu_done = threading.Event()
-        self.all_games_finished = threading.Event()
-        self.ps = dict()
-        self.v = dict()
-        return
 
     def evaluate_nn(self, state):
         """
@@ -31,6 +22,8 @@ class ExampleGenerator:
         """
         board = self.net.state_to_board(state)
         id = hash(board.tostring())
+        self.conn.send(board)
+
         with self.gpu_lock:
             self.gpu_queue[id] = board
 
@@ -47,6 +40,20 @@ class ExampleGenerator:
             except KeyError:
                 pass
         return pi, vi
+
+class ExampleGenerator:
+    def __init__(self, net, **kwargs):
+        self.kwargs = kwargs
+        self.net = net
+        self.examples = []
+        self.examples_lock = threading.Lock()
+        self.gpu_queue = dict()
+        self.gpu_lock = threading.Lock()
+        self.gpu_done = threading.Event()
+        self.all_games_finished = threading.Event()
+        self.ps = dict()
+        self.v = dict()
+        return
 
     def handle_gpu(self):
         """Thread which continuously pushes items from the gpu_queue to the gpu. This results in multiple games being
@@ -70,8 +77,9 @@ class ExampleGenerator:
                     self.gpu_queue = dict()
         return
 
-    def generate_game(self):
-        example = self.play_game_self(self.evaluate_nn)
+    def generate_game(self, conn):
+        evaluator = Evaluator(self.net, conn)
+        example = self.play_game_self(evaluator.evaluate_nn)
         with self.examples_lock:
             self.examples.append(example)
         return
@@ -116,12 +124,17 @@ class ExampleGenerator:
         self.gpu_queue = dict()
         self.ps = dict()
         self.v = dict()
-        games = [
-            threading.Thread(target=self.generate_game, )
-            for i in range(n_games)
-        ]
+        games = []
+        parent_conns = []
+        child_conns = []
+        for i in range(n_games):
+            parent_conn, child_conn = Pipe()
+            parent_conns.append(parent_conn)
+            child_conns.append(child_conn)
+            games.append(threading.Thread(target=self.generate_game, args=(child_conn,)))
+
         self.all_games_finished.clear()
-        gpu_handler = threading.Thread(target=self.handle_gpu)
+        gpu_handler = threading.Thread(target=self.handle_gpu, args=(parent_conns,))
         for game in games:
             game.start()
         gpu_handler.start()
@@ -137,5 +150,5 @@ if __name__ == '__main__':
     net.eval()
     generator = ExampleGenerator(net)
     start = time.time()
-    generator.generate_examples(1)
+    generator.generate_examples(10)
     print(time.time() - start)
