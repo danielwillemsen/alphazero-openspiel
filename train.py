@@ -24,12 +24,12 @@ class Trainer:
         self.board_height = 6
         self.n_in_row = 4
         self.n_games_per_generation = 250
-        self.batches_per_generation = 2500
-        self.n_games_buffer = 5000
+        self.batches_per_generation = 1000
+        self.n_games_buffer = 2500
         self.buffer = []
         self.n_tests = 25
         self.use_gpu = True
-        self.batch_size = 256
+        self.batch_size = 32
         self.lr = 0.0002
         self.games_played = 0
         self.criterion_policy = nn.BCELoss()
