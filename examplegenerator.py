@@ -7,7 +7,6 @@ import numpy as np
 import time
 from alphazerobot import AlphaZeroBot
 import pyspiel
-from train import play_game_self
 
 class ExampleGenerator:
     def __init__(self, net, **kwargs):
