@@ -6,6 +6,7 @@ import numpy as np
 import time
 from alphazerobot import AlphaZeroBot
 import pyspiel
+from train import play_game_self
 from multiprocessing import Process, Pipe, Value, JoinableQueue, Queue
 import multiprocessing
 
@@ -84,13 +85,6 @@ class ExampleGenerator:
             for i in range(7):
                 # Create a policy list. To be used in the net instead of a list of tuples.
                 policy_list.append(policy_dict.get(i, 0.0))
-
-            if sum(policy_list) > 0.0:
-                # Normalize policy after taking out illegal moves
-                policy_list = [item / sum(policy_list) for item in policy_list]
-            else:
-                policy_list = [1.0 / len(policy_list) for item in policy_list]
-
             examples.append([state.information_state(), Net.state_to_board(state), policy_list, None])
             state.apply_action(action)
         # Get return for starting player

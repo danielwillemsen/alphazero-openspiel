@@ -129,28 +129,6 @@ class Trainer:
                 loss_tot_p = 0
         self.current_net.eval()
 
-    def play_game_self(self):
-        examples = []
-        game = pyspiel.load_game('connect_four')
-        state = game.new_initial_state()
-        alphazero_bot = AlphaZeroBot(game, 0, self.current_net.predict, self_play=True)
-        while not state.is_terminal():
-            policy, action = alphazero_bot.step(state)
-            policy_dict = dict(policy)
-            policy_list = []
-            for i in range(self.board_width):
-                # Create a policy list. To be used in the net instead of a list of tuples.
-                policy_list.append(policy_dict.get(i, 0.0))
-            examples.append([state.information_state(), Net.state_to_board(state), policy_list, None])
-            state.apply_action(action)
-
-        # Get return for starting player
-        reward = state.returns()[0]
-        for i in range(len(examples)):
-            examples[i][3] = reward
-            reward *= -1
-        return examples
-
     def generate_examples(self, n_games):
         """Generates games in a multithreaded way.
 
@@ -162,7 +140,7 @@ class Trainer:
         # start = time.time()
         # for i in range(n_games):
         # 	print("Game " + str(i) + " / " + str(n_games))
-        # 	examples = self.play_game_self()
+        # 	examples = Examplegenerator.play_game_self(self.current_net.predict)
         # 	self.buffer.append(examples)
         # print("Finished Generating Data (normal)")
         # print(time.time()-start)
