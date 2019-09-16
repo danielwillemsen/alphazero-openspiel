@@ -27,6 +27,7 @@ class Evaluator():
         vi = float(vi[0])
         return pi, vi
 
+
 class ExampleGenerator:
     def __init__(self, net, **kwargs):
         self.kwargs = kwargs
@@ -64,13 +65,10 @@ class ExampleGenerator:
                     reclist[i].send((p_t_list[i], v_t_list[i]))
         return
 
-    def generate_game(self, conn, examples_queue, finished_indicator):
+    def generate_game(self, conn):
         evaluator = Evaluator(self.net, conn)
         example = self.play_game_self(evaluator.evaluate_nn)
-        examples_queue.put(example)
-        with finished_indicator.get_lock():
-            finished_indicator.value = finished_indicator.value + 1
-        return
+        return example
 
     @staticmethod
     def play_game_self(policy_fn):
@@ -103,42 +101,29 @@ class ExampleGenerator:
         """
         self.examples = []
 
-        examples_queue = JoinableQueue(0)
+        spawn_context = multiprocessing.get_context('spawn')
+        is_done = spawn_context.Value('i', 0)
+
         games = []
         parent_conns = []
         child_conns = []
-        is_done = Value('i', 0)
-        finished_indicator = Value('i', 0)
         for i in range(n_games):
-            parent_conn, child_conn = Pipe()
+            parent_conn, child_conn = spawn_context.Pipe()
             parent_conns.append(parent_conn)
             child_conns.append(child_conn)
-            games.append(Process(target=self.generate_game, args=(child_conn, examples_queue, finished_indicator)))
-        gpu_handler = Process(target=self.handle_gpu, args=(parent_conns, is_done))
+        pool = spawn_context.Pool(processes=24)
+        gpu_handler = spawn_context.Process(target=self.handle_gpu, args=(parent_conns, is_done))
         gpu_handler.start()
-        for game in games:
-            game.start()
-        finished = False
-        while not finished:
-            with finished_indicator.get_lock():
-                if finished_indicator.value == n_games:
-                    finished = True
-        while len(self.examples) < n_games:
-            self.examples.append(examples_queue.get(timeout=0.1))
-            examples_queue.task_done()
-        examples_queue.join()
-        for game in games:
-            game.join()
+        self.examples = pool.map(self.generate_game, child_conns)
         with is_done.get_lock():
             is_done.value = 1
         gpu_handler.join()
+        pool.close()
         print("Generated " + str(len(self.examples)) + " games")
         return self.examples
 
 
 if __name__ == '__main__':
-    multiprocessing.set_start_method('spawn', force=True)
-
     use_gpu = True
     if use_gpu:
         if not torch.cuda.is_available():
@@ -152,5 +137,5 @@ if __name__ == '__main__':
     generator = ExampleGenerator(net)
     start = time.time()
 
-    generator.generate_examples(30)
+    generator.generate_examples(10)
     print(time.time() - start)
