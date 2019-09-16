@@ -1,13 +1,13 @@
 import multiprocessing
 from mctsagent import MCTSAgent
 from connect4net import Net
-import threading
 import torch
 import numpy as np
 import time
 from alphazerobot import AlphaZeroBot
 import pyspiel
-from multiprocessing import Process, Pipe
+from multiprocessing import Process, Pipe, Value, JoinableQueue, Queue
+import multiprocessing
 
 class Evaluator():
     def __init__(self, net, conn):
@@ -21,24 +21,9 @@ class Evaluator():
         @return: pi: policy according to neural net, vi: value according to neural net.
         """
         board = self.net.state_to_board(state)
-        id = hash(board.tostring())
         self.conn.send(board)
-
-        with self.gpu_lock:
-            self.gpu_queue[id] = board
-
-        # Wait until nn is ready
-        pi = None
-        vi = None
-        # Get correct item
-        while pi is None or vi is None:
-            self.gpu_done.wait()
-            try:
-                with self.gpu_lock:
-                    pi = self.ps[id]
-                    vi = float(self.v[id][0])
-            except KeyError:
-                pass
+        pi, vi = self.conn.recv()
+        vi = float(vi[0])
         return pi, vi
 
 class ExampleGenerator:
@@ -46,42 +31,44 @@ class ExampleGenerator:
         self.kwargs = kwargs
         self.net = net
         self.examples = []
-        self.examples_lock = threading.Lock()
         self.gpu_queue = dict()
-        self.gpu_lock = threading.Lock()
-        self.gpu_done = threading.Event()
-        self.all_games_finished = threading.Event()
         self.ps = dict()
         self.v = dict()
         return
 
-    def handle_gpu(self):
+    def handle_gpu(self, parent_conns, is_done):
         """Thread which continuously pushes items from the gpu_queue to the gpu. This results in multiple games being
         evaluated in a single batch
 
         @return:
         """
-        while not self.all_games_finished.isSet():
-            with self.gpu_lock:
-                if len(self.gpu_queue) > 0:
-                    keys = list(self.gpu_queue.keys())
-                    batch = list(self.gpu_queue.values())
-                    batch = torch.from_numpy(np.array(batch)).float().to(self.net.device)
-                    p_t, v_t = self.net.forward(batch)
-                    p_t_list = p_t.tolist()
-                    v_t_list = v_t.tolist()
-                    for i in range(len(p_t_list)):
-                        self.ps[keys[i]] = p_t_list[i]
-                        self.v[keys[i]] = v_t_list[i]
-                    self.gpu_done.set()
-                    self.gpu_queue = dict()
+        all_games_finished = False
+        while not all_games_finished:
+            with is_done.get_lock():
+                if is_done.value == 1:
+                    all_games_finished = True
+
+            reclist = []
+            batch = []
+            for conn in parent_conns:
+                if conn.poll():
+                    reclist.append(conn)
+                    batch.append(conn.recv())
+            if batch:
+                batch = torch.from_numpy(np.array(batch)).float().to(self.net.device)
+                p_t, v_t = self.net.forward(batch)
+                p_t_list = p_t.tolist()
+                v_t_list = v_t.tolist()
+                for i in range(len(p_t_list)):
+                    reclist[i].send((p_t_list[i], v_t_list[i]))
         return
 
-    def generate_game(self, conn):
+    def generate_game(self, conn, examples_queue, finished_indicator):
         evaluator = Evaluator(self.net, conn)
         example = self.play_game_self(evaluator.evaluate_nn)
-        with self.examples_lock:
-            self.examples.append(example)
+        examples_queue.put(example)
+        with finished_indicator.get_lock():
+            finished_indicator.value = finished_indicator.value + 1
         return
 
     @staticmethod
@@ -121,34 +108,55 @@ class ExampleGenerator:
         @return:
         """
         self.examples = []
-        self.gpu_queue = dict()
-        self.ps = dict()
-        self.v = dict()
+
+        examples_queue = JoinableQueue(0)
         games = []
         parent_conns = []
         child_conns = []
+        is_done = Value('i', 0)
+        finished_indicator = Value('i', 0)
         for i in range(n_games):
             parent_conn, child_conn = Pipe()
             parent_conns.append(parent_conn)
             child_conns.append(child_conn)
-            games.append(threading.Thread(target=self.generate_game, args=(child_conn,)))
-
-        self.all_games_finished.clear()
-        gpu_handler = threading.Thread(target=self.handle_gpu, args=(parent_conns,))
-        for game in games:
-            game.start()
+            games.append(Process(target=self.generate_game, args=(child_conn, examples_queue, finished_indicator)))
+        gpu_handler = Process(target=self.handle_gpu, args=(parent_conns, is_done))
         gpu_handler.start()
         for game in games:
+            game.start()
+        finished = False
+        while not finished:
+            with finished_indicator.get_lock():
+                if finished_indicator.value == n_games:
+                    finished = True
+        while len(self.examples) < n_games:
+            self.examples.append(examples_queue.get(timeout=0.1))
+            examples_queue.task_done()
+        examples_queue.join()
+        for game in games:
             game.join()
-        self.all_games_finished.set()
+        with is_done.get_lock():
+            is_done.value = 1
         gpu_handler.join()
+        print("Generated " + str(len(self.examples)) + " games")
         return self.examples
 
 
 if __name__ == '__main__':
-    net = Net()
+    multiprocessing.set_start_method('spawn', force=True)
+
+    use_gpu = True
+    if use_gpu:
+        if not torch.cuda.is_available():
+            print("Tried to use GPU, but none is available")
+            use_gpu = False
+    device = torch.device("cuda:0" if use_gpu else "cpu")
+    net = Net(device=device)
+    net.to(device)
+
     net.eval()
     generator = ExampleGenerator(net)
     start = time.time()
-    generator.generate_examples(10)
+
+    generator.generate_examples(30)
     print(time.time() - start)
