@@ -6,9 +6,9 @@ import numpy as np
 import time
 from alphazerobot import AlphaZeroBot
 import pyspiel
-from train import play_game_self
 from multiprocessing import Process, Pipe, Value, JoinableQueue, Queue
 import multiprocessing
+
 
 class Evaluator():
     def __init__(self, net, conn):
