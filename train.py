@@ -76,7 +76,9 @@ class Trainer:
 
         # Backward pass
         loss_v = self.criterion_value(v_t, v_r.unsqueeze(1))
-        loss_p = self.criterion_policy(p_t, p_r)
+        loss_p = -torch.sum(p_r*torch.log(p_t))/p_r.size()[0]
+
+        #loss_p = self.criterion_policy(p_t, p_r)
         loss = loss_v + loss_p
         loss.backward()
         self.optimizer.step()
@@ -230,14 +232,14 @@ class Trainer:
         start = time.time()
         print("Testing...")
         self.test_data['games_played'].append(self.games_played)
-        score_tot = 0.
-        for i in range(self.n_tests):
-            score1, score2 = self.test_zero_vs_random()
-            score_tot += score1
-            score_tot += score2
-        avg = score_tot / (2 * self.n_tests)
-        self.test_data['zero_vs_random'].append(avg)
-        print("Average score vs random:" + str(avg))
+        # score_tot = 0.
+        # for i in range(self.n_tests):
+        #     score1, score2 = self.test_zero_vs_random()
+        #     score_tot += score1
+        #     score_tot += score2
+        # avg = score_tot / (2 * self.n_tests)
+        # self.test_data['zero_vs_random'].append(avg)
+        # print("Average score vs random:" + str(avg))
         score_tot = 0.
         for i in range(self.n_tests):
             score1, score2 = self.test_net_vs_random()
@@ -246,14 +248,14 @@ class Trainer:
         avg = score_tot / (2 * self.n_tests)
         self.test_data['net_vs_random'].append(avg)
         print("Average score vs random (net only):" + str(avg))
-        score_tot = 0.
-        for i in range(self.n_tests):
-            score1, score2 = self.test_zero_vs_mcts(100)
-            score_tot += score1
-            score_tot += score2
-        avg = score_tot / (2 * self.n_tests)
-        self.test_data['zero_vs_mcts100'].append(avg)
-        print("Average score vs mcts100:" + str(avg))
+        # score_tot = 0.
+        # for i in range(self.n_tests):
+        #     score1, score2 = self.test_zero_vs_mcts(100)
+        #     score_tot += score1
+        #     score_tot += score2
+        # avg = score_tot / (2 * self.n_tests)
+        # self.test_data['zero_vs_mcts100'].append(avg)
+        # print("Average score vs mcts100:" + str(avg))
         score_tot = 0.
         for i in range(self.n_tests):
             score1, score2 = self.test_net_vs_mcts(100)
