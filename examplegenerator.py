@@ -101,7 +101,7 @@ class ExampleGenerator:
         """
         self.examples = []
 
-        spawn_context = multiprocessing.get_context('spawn')
+        spawn_context = multiprocessing.get_context('fork')
         is_done = spawn_context.Value('i', 0)
 
         games = []
@@ -111,7 +111,7 @@ class ExampleGenerator:
             parent_conn, child_conn = spawn_context.Pipe()
             parent_conns.append(parent_conn)
             child_conns.append(child_conn)
-        pool = spawn_context.Pool(processes=24)
+        pool = spawn_context.Pool(processes=24, initializer=np.random.seed)
         gpu_handler = spawn_context.Process(target=self.handle_gpu, args=(parent_conns, is_done))
         gpu_handler.start()
         self.examples = pool.map(self.generate_game, child_conns)
