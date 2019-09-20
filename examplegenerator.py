@@ -7,6 +7,7 @@ import torch
 
 from alphazerobot import AlphaZeroBot
 from connect4net import Net
+from game_utils import play_game_self
 
 
 class Evaluator():
@@ -64,32 +65,10 @@ class ExampleGenerator:
                     reclist[i].send((p_t_list[i], v_t_list[i]))
         return
 
-    def generate_game(self, conn):
+    def generate_single_game(self, conn):
         evaluator = Evaluator(self.net, conn)
-        example = self.play_game_self(evaluator.evaluate_nn)
+        example = play_game_self(evaluator.evaluate_nn)
         return example
-
-    @staticmethod
-    def play_game_self(policy_fn):
-        examples = []
-        game = pyspiel.load_game('connect_four')
-        state = game.new_initial_state()
-        alphazero_bot = AlphaZeroBot(game, 0, policy_fn, self_play=True)
-        while not state.is_terminal():
-            policy, action = alphazero_bot.step(state)
-            policy_dict = dict(policy)
-            policy_list = []
-            for i in range(7):
-                # Create a policy list. To be used in the net instead of a list of tuples.
-                policy_list.append(policy_dict.get(i, 0.0))
-            examples.append([state.information_state(), Net.state_to_board(state), policy_list, None])
-            state.apply_action(action)
-        # Get return for starting player
-        reward = state.returns()[0]
-        for i in range(len(examples)):
-            examples[i][3] = reward
-            reward *= -1
-        return examples
 
     def generate_examples(self, n_games):
         """Creates threads with MCTSAgents who play one game each. They send neural network evaluation requests to the
@@ -100,7 +79,7 @@ class ExampleGenerator:
         """
         self.examples = []
 
-        spawn_context = multiprocessing.get_context('fork')
+        spawn_context = multiprocessing.get_context('spawn')
         is_done = spawn_context.Value('i', 0)
 
         games = []
@@ -113,7 +92,7 @@ class ExampleGenerator:
         pool = spawn_context.Pool(processes=24, initializer=np.random.seed)
         gpu_handler = spawn_context.Process(target=self.handle_gpu, args=(parent_conns, is_done))
         gpu_handler.start()
-        self.examples = pool.map(self.generate_game, child_conns)
+        self.examples = pool.map(self.generate_single_game, child_conns)
         with is_done.get_lock():
             is_done.value = 1
         gpu_handler.join()

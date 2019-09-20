@@ -74,13 +74,12 @@ class NeuralNetBot(pyspiel.Bot):
 
     """
 
-    def __init__(self, game, player, net):
+    def __init__(self, game, player, policy_fn):
         super(NeuralNetBot, self).__init__(game, player)
-        self.net = net
-        self.net.eval()
+        self.policy_fn = policy_fn
 
     def step(self, state):
-        ps, v = self.net.predict(state)
+        ps, v = self.policy_fn(state)
         action_probabilities = np.array(ps)
 
         # Remove illegal actions

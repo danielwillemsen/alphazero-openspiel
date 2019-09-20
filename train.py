@@ -12,6 +12,7 @@ from alphazerobot import AlphaZeroBot, NeuralNetBot
 from connect4net import Net
 from examplegenerator import ExampleGenerator
 from mctsagent import MCTSAgent
+from game_utils import *
 
 
 class Trainer:
@@ -170,73 +171,13 @@ class Trainer:
             while len(self.buffer) > self.n_games_buffer:
                 del self.buffer[0]
 
-    def test_zero_vs_mcts(self, max_search_nodes):
-        game = pyspiel.load_game('connect_four')
-
-        # Alphazero first
-        zero_bot = AlphaZeroBot(game, 0, policy_fn=self.current_net.predict, use_dirichlet=False)
-        mcts_bot = mcts.MCTSBot(game, 1, 1,
-                                max_search_nodes, mcts.RandomRolloutEvaluator(1))
-        score1 = play_game(game, zero_bot, mcts_bot)
-
-        # Random bot first
-        zero_bot = AlphaZeroBot(game, 1, policy_fn=self.current_net.predict, use_dirichlet=False)
-        mcts_bot = mcts.MCTSBot(game, 0, 1,
-                                max_search_nodes, mcts.RandomRolloutEvaluator(1))
-        score2 = -play_game(game, mcts_bot, zero_bot)
-        return score1, score2
-
-    def test_net_vs_mcts(self, max_search_nodes):
-        game = pyspiel.load_game('connect_four')
-
-        # Alphazero first
-        zero_bot = NeuralNetBot(game, 0, self.current_net)
-        mcts_bot = mcts.MCTSBot(game, 1, 1,
-                                max_search_nodes, mcts.RandomRolloutEvaluator(1))
-        score1 = play_game(game, zero_bot, mcts_bot)
-
-        # Random bot first
-        zero_bot = NeuralNetBot(game, 1, self.current_net)
-        mcts_bot = mcts.MCTSBot(game, 0, 1,
-                                max_search_nodes, mcts.RandomRolloutEvaluator(1))
-        score2 = -play_game(game, mcts_bot, zero_bot)
-        return score1, score2
-
-    def test_zero_vs_random(self):
-        game = pyspiel.load_game('connect_four')
-
-        # Alphazero first
-        zero_bot = AlphaZeroBot(game, 0, policy_fn=self.current_net.predict, use_dirichlet=False)
-        random_bot = pyspiel.make_uniform_random_bot(game, 1, np.random.randint(0, 1000))
-        score1 = play_game(game, zero_bot, random_bot)
-
-        # Random bot first
-        zero_bot = AlphaZeroBot(game, 1, policy_fn=self.current_net.predict, use_dirichlet=False)
-        random_bot = pyspiel.make_uniform_random_bot(game, 0, np.random.randint(0, 1000))
-        score2 = -play_game(game, random_bot, zero_bot)
-        return score1, score2
-
-    def test_net_vs_random(self):
-        game = pyspiel.load_game('connect_four')
-
-        # Alphazero first
-        zero_bot = NeuralNetBot(game, 0, self.current_net)
-        random_bot = pyspiel.make_uniform_random_bot(game, 1, np.random.randint(0, 1000))
-        score1 = play_game(game, zero_bot, random_bot)
-
-        # Random bot first
-        zero_bot = NeuralNetBot(game, 1, self.current_net)
-        random_bot = pyspiel.make_uniform_random_bot(game, 0, np.random.randint(0, 1000))
-        score2 = -play_game(game, random_bot, zero_bot)
-        return score1, score2
-
     def test_agent(self):
         start = time.time()
         print("Testing...")
         self.test_data['games_played'].append(self.games_played)
         # score_tot = 0.
         # for i in range(self.n_tests):
-        #     score1, score2 = self.test_zero_vs_random()
+        #     score1, score2 = test_zero_vs_random(self.current_net.predict)
         #     score_tot += score1
         #     score_tot += score2
         # avg = score_tot / (2 * self.n_tests)
@@ -244,7 +185,7 @@ class Trainer:
         # print("Average score vs random:" + str(avg))
         score_tot = 0.
         for i in range(self.n_tests):
-            score1, score2 = self.test_net_vs_random()
+            score1, score2 = test_net_vs_random(self.current_net.predict)
             score_tot += score1
             score_tot += score2
         avg = score_tot / (2 * self.n_tests)
@@ -252,7 +193,7 @@ class Trainer:
         print("Average score vs random (net only):" + str(avg))
         # score_tot = 0.
         # for i in range(self.n_tests):
-        #     score1, score2 = self.test_zero_vs_mcts(100)
+        #     score1, score2 = test_zero_vs_mcts(self.current_net.predict, 100)
         #     score_tot += score1
         #     score_tot += score2
         # avg = score_tot / (2 * self.n_tests)
@@ -260,7 +201,7 @@ class Trainer:
         # print("Average score vs mcts100:" + str(avg))
         score_tot = 0.
         for i in range(self.n_tests):
-            score1, score2 = self.test_net_vs_mcts(100)
+            score1, score2 = test_net_vs_mcts(self.current_net.predict, 100)
             score_tot += score1
             score_tot += score2
         avg = score_tot / (2 * self.n_tests)
@@ -268,7 +209,7 @@ class Trainer:
         print("Average score vs mcts100 (net only):" + str(avg))
         score_tot = 0.
         for i in range(self.n_tests):
-            score1, score2 = self.test_zero_vs_mcts(200)
+            score1, score2 = test_zero_vs_mcts(self.current_net.predict, 200)
             score_tot += score1
             score_tot += score2
         avg = score_tot / (2 * self.n_tests)
@@ -276,7 +217,7 @@ class Trainer:
         print("Average score vs mcts200:" + str(avg))
         score_tot = 0.
         for i in range(self.n_tests):
-            score1, score2 = self.test_net_vs_mcts(200)
+            score1, score2 = test_net_vs_mcts(self.current_net.predict, 200)
             score_tot += score1
             score_tot += score2
         avg = score_tot / (2 * self.n_tests)
@@ -303,18 +244,6 @@ class Trainer:
                 print("Saving network")
                 torch.save(self.current_net.state_dict(), self.model_path + self.name + str(generation) + ".pth")
                 print("Network saved")
-
-
-def play_game(game, player1, player2):
-    # Returns the reward of the first player
-    state = game.new_initial_state()
-    while not state.is_terminal():
-        if len(state.history()) % 2 == 0:
-            _, action = player1.step(state)
-        else:
-            _, action = player2.step(state)
-        state.apply_action(action)
-    return state.returns()[0]
 
 
 if __name__ == '__main__':
