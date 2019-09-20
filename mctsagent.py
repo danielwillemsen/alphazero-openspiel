@@ -1,8 +1,9 @@
+import warnings
+
+import numpy as np
+
 from connect4 import Game
 from mcts import MCTS
-import numpy as np
-import warnings
-import multiprocessing
 
 
 class MCTSAgent:

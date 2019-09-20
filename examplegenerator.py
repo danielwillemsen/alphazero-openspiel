@@ -1,13 +1,12 @@
 import multiprocessing
-from mctsagent import MCTSAgent
-from connect4net import Net
-import torch
-import numpy as np
 import time
-from alphazerobot import AlphaZeroBot
+
+import numpy as np
 import pyspiel
-from multiprocessing import Process, Pipe, Value, JoinableQueue, Queue
-import multiprocessing
+import torch
+
+from alphazerobot import AlphaZeroBot
+from connect4net import Net
 
 
 class Evaluator():

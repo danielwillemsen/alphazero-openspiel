@@ -1,4 +1,5 @@
 import torch
+
 from connect4net import Net
 from mctsagent import MCTSAgent
 

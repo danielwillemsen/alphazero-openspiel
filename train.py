@@ -1,16 +1,17 @@
+import pickle
+import time
+from datetime import datetime
+
+import numpy as np
+import pyspiel
 import torch
 import torch.nn as nn
-import numpy as np
-import time
-import pickle
-from datetime import datetime
-import pyspiel
 from open_spiel.python.algorithms import mcts
 
-from examplegenerator import ExampleGenerator
-from connect4net import Net
-from mctsagent import MCTSAgent
 from alphazerobot import AlphaZeroBot, NeuralNetBot
+from connect4net import Net
+from examplegenerator import ExampleGenerator
+from mctsagent import MCTSAgent
 
 
 class Trainer:
@@ -76,9 +77,9 @@ class Trainer:
 
         # Backward pass
         loss_v = self.criterion_value(v_t, v_r.unsqueeze(1))
-        loss_p = -torch.sum(p_r*torch.log(p_t))/p_r.size()[0]
+        loss_p = -torch.sum(p_r * torch.log(p_t)) / p_r.size()[0]
 
-        #loss_p = self.criterion_policy(p_t, p_r)
+        # loss_p = self.criterion_policy(p_t, p_r)
         loss = loss_v + loss_p
         loss.backward()
         self.optimizer.step()

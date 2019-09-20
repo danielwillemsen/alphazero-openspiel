@@ -31,7 +31,8 @@ class Node:
         @param legal_actions: (list) of all legal actions
         @return:
         """
-        value_list = [self.children[i].get_value(c_puct) if i in legal_actions else -float('inf') for i in range(len(self.children))]
+        value_list = [self.children[i].get_value(c_puct) if i in legal_actions else -float('inf') for i in
+                      range(len(self.children))]
         action = int(np.argmax(value_list))
         child = self.children[action]
         return child, np.argmax(value_list)
