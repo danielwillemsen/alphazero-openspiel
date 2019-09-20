@@ -21,6 +21,7 @@ class Trainer:
         self.start_time = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         self.save = True
         self.save_n_gens = 5
+        self.test_n_gens = 5
         self.board_width = 7
         self.board_height = 6
         self.n_in_row = 4
@@ -28,7 +29,7 @@ class Trainer:
         self.batches_per_generation = 1000
         self.n_games_buffer = 2500
         self.buffer = []
-        self.n_tests = 25
+        self.n_tests = 100
         self.use_gpu = True
         self.batch_size = 32
         self.lr = 0.0002
@@ -294,8 +295,9 @@ class Trainer:
             generation += 1
             self.generate_examples(self.n_games_per_generation)
             self.train_network(self.batches_per_generation)
-            self.test_agent()
-
+            # Perform testing periodically
+            if generation % self.test_n_gens == 0:
+                self.test_agent()
             # Periodically save network
             if self.save and generation % self.save_n_gens == 0:
                 print("Saving network")
