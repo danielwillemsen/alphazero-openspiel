@@ -6,6 +6,7 @@ import numpy as np
 import pyspiel
 import torch
 import torch.nn as nn
+from torch import multiprocessing
 from open_spiel.python.algorithms import mcts
 
 from alphazerobot import AlphaZeroBot, NeuralNetBot
@@ -13,7 +14,6 @@ from connect4net import Net
 from examplegenerator import ExampleGenerator
 from mctsagent import MCTSAgent
 from game_utils import *
-
 
 class Trainer:
     def __init__(self):
@@ -26,13 +26,13 @@ class Trainer:
         self.board_width = 7
         self.board_height = 6
         self.n_in_row = 4
-        self.n_games_per_generation = 250
-        self.batches_per_generation = 1000
-        self.n_games_buffer = 2500
+        self.n_games_per_generation = 500
+        self.batches_per_generation = 2000
+        self.n_games_buffer = 20000
         self.buffer = []
         self.n_tests = 100
         self.use_gpu = True
-        self.batch_size = 32
+        self.batch_size = 64
         self.lr = 0.0002
         self.games_played = 0
         self.criterion_policy = nn.BCELoss()
@@ -144,9 +144,9 @@ class Trainer:
         # print("Generating Data")
         # start = time.time()
         # for i in range(n_games):
-        # 	print("Game " + str(i) + " / " + str(n_games))
-        # 	examples = Examplegenerator.play_game_self(self.current_net.predict)
-        # 	self.buffer.append(examples)
+        #     print("Game " + str(i) + " / " + str(n_games))
+        #     examples = play_game_self(self.current_net.predict)
+        #     #self.buffer.append(examples)
         # print("Finished Generating Data (normal)")
         # print(time.time()-start)
 
@@ -247,5 +247,6 @@ class Trainer:
 
 
 if __name__ == '__main__':
+    multiprocessing.set_start_method('spawn')
     trainer = Trainer()
     trainer.run()

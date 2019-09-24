@@ -8,12 +8,18 @@ import torch
 from alphazerobot import AlphaZeroBot
 from connect4net import Net
 from game_utils import play_game_self
+from state_to_board import state_to_board
+
+
+def generate_single_game(conn):
+    evaluator = Evaluator(conn)
+    example = play_game_self(evaluator.evaluate_nn)
+    return example
 
 
 class Evaluator():
-    def __init__(self, net, conn):
+    def __init__(self, conn):
         self.conn = conn
-        self.net = net
 
     def evaluate_nn(self, state):
         """
@@ -21,7 +27,7 @@ class Evaluator():
         @param state: The game which needs to be evaluated
         @return: pi: policy according to neural net, vi: value according to neural net.
         """
-        board = self.net.state_to_board(state)
+        board = state_to_board(state)
         self.conn.send(board)
         pi, vi = self.conn.recv()
         vi = float(vi[0])
@@ -65,10 +71,20 @@ class ExampleGenerator:
                     reclist[i].send((p_t_list[i], v_t_list[i]))
         return
 
-    def generate_single_game(self, conn):
-        evaluator = Evaluator(self.net, conn)
-        example = play_game_self(evaluator.evaluate_nn)
-        return example
+    def start_pool(self,n_games):
+        spawn_context = multiprocessing.get_context('spawn')
+        is_done = spawn_context.Value('i', 0)
+        parent_conns = []
+        child_conns = []
+        for i in range(n_games):
+            parent_conn, child_conn = spawn_context.Pipe()
+            parent_conns.append(parent_conn)
+            child_conns.append(child_conn)
+        pool = spawn_context.Pool(processes=16, initializer=np.random.seed)
+        gpu_handler = spawn_context.Process(target=self.handle_gpu, args=(parent_conns, is_done))
+        gpu_handler.start()
+        examples = pool.map_async(generate_single_game, child_conns)
+        return [gpu_handler, pool, examples, is_done, child_conns]
 
     def generate_examples(self, n_games):
         """Creates threads with MCTSAgents who play one game each. They send neural network evaluation requests to the
@@ -79,24 +95,19 @@ class ExampleGenerator:
         """
         self.examples = []
 
-        spawn_context = multiprocessing.get_context('spawn')
-        is_done = spawn_context.Value('i', 0)
 
-        games = []
-        parent_conns = []
-        child_conns = []
-        for i in range(n_games):
-            parent_conn, child_conn = spawn_context.Pipe()
-            parent_conns.append(parent_conn)
-            child_conns.append(child_conn)
-        pool = spawn_context.Pool(processes=24, initializer=np.random.seed)
-        gpu_handler = spawn_context.Process(target=self.handle_gpu, args=(parent_conns, is_done))
-        gpu_handler.start()
-        self.examples = pool.map(self.generate_single_game, child_conns)
-        with is_done.get_lock():
-            is_done.value = 1
-        gpu_handler.join()
-        pool.close()
+        n_pools = 4
+        pools = []
+        examples = []
+        for i in range(n_pools):
+            pools.append(self.start_pool(int(n_games/n_pools)))
+        for i in range(n_pools):
+            examples.append(pools[i][2].get())
+            with pools[i][3].get_lock():
+                pools[i][3].value = 1
+            pools[i][0].join()
+            pools[i][1].close()
+        self.examples = [item for sublist in examples for item in sublist]
         print("Generated " + str(len(self.examples)) + " games")
         return self.examples
 

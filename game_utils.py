@@ -1,6 +1,7 @@
 import numpy as np
 import pyspiel
 from open_spiel.python.algorithms import mcts
+from state_to_board import state_to_board
 
 from alphazerobot import AlphaZeroBot, NeuralNetBot
 from connect4net import Net
@@ -94,7 +95,7 @@ def play_game_self(policy_fn):
         for i in range(7):
             # Create a policy list. To be used in the net instead of a list of tuples.
             policy_list.append(policy_dict.get(i, 0.0))
-        examples.append([state.information_state(), Net.state_to_board(state), policy_list, None])
+        examples.append([state.information_state(), state_to_board(state), policy_list, None])
         state.apply_action(action)
     # Get return for starting player
     reward = state.returns()[0]
