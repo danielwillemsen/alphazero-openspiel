@@ -52,7 +52,7 @@ class Net(nn.Module):
         x = F.leaky_relu(self.fc1_bn(self.fc1(x)))
         x = self.fc2(x)
         xp, v = x.split(self.width, 1)
-        return F.softmax(xp), F.tanh(v)
+        return F.softmax(xp, dim=1), torch.tanh(v)
 
     def predict(self, state):
         """
