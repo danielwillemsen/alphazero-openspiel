@@ -33,17 +33,17 @@ def test_zero_vs_random(policy_fn):
     return score1, score2
 
 
-def test_zero_vs_mcts(policy_fn, max_search_nodes):
+def test_zero_vs_mcts(policy_fn, max_search_nodes, **kwargs):
     game = pyspiel.load_game('connect_four')
 
     # Alphazero first
-    zero_bot = AlphaZeroBot(game, 0, policy_fn=policy_fn, use_dirichlet=False)
+    zero_bot = AlphaZeroBot(game, 0, policy_fn=policy_fn, use_dirichlet=False, **kwargs)
     mcts_bot = mcts.MCTSBot(game, 1, 1,
                             max_search_nodes, mcts.RandomRolloutEvaluator(1))
     score1 = play_game(game, zero_bot, mcts_bot)
 
     # Random bot first
-    zero_bot = AlphaZeroBot(game, 1, policy_fn=policy_fn, use_dirichlet=False)
+    zero_bot = AlphaZeroBot(game, 1, policy_fn=policy_fn, use_dirichlet=False, **kwargs)
     mcts_bot = mcts.MCTSBot(game, 0, 1,
                             max_search_nodes, mcts.RandomRolloutEvaluator(1))
     score2 = -play_game(game, mcts_bot, zero_bot)

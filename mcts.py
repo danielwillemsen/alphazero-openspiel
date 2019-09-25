@@ -5,18 +5,19 @@ This code is inspired by the MCTS implementation of Junxiao Song
 """
 
 import numpy as np
-
+import math
 
 class Node:
     """MTCS Node
     """
 
-    def __init__(self, parent, prior_p):
+    def __init__(self, parent, prior_p, use_puct=True):
         self.parent = parent
         self.children = []
         self.P = prior_p
         self.Q = 0
         self.N = 0
+        self.use_puct = use_puct
 
     def is_leaf(self):
         return self.children == []
@@ -44,7 +45,7 @@ class Node:
         @return:
         """
         for action in range(len(prior_ps)):
-            self.children.append(Node(self, prior_ps[action]))
+            self.children.append(Node(self, prior_ps[action], use_puct=self.use_puct))
 
     def get_value(self, c_puct):
         """Calculates the value of the node
@@ -52,7 +53,10 @@ class Node:
         @param c_puct: (float) coefficient for exploration.
         @return: Q plus bonus value (for exploration)
         """
-        return self.Q + c_puct * self.P * np.sqrt(self.parent.N) / (1 + self.N)
+        if self.use_puct:
+            return self.Q + c_puct * self.P * np.sqrt(self.parent.N) / (self.N+1)
+        else:
+            return float('inf') if self.N == 0 else self.Q + c_puct * self.P * np.sqrt(math.log(self.parent.N) / (self.N))
 
     def update(self, value):
         self.Q = (self.N * self.Q + value) / (self.N + 1)
@@ -72,6 +76,7 @@ class MCTS:
         self.c_puct = float(kwargs.get('c_puct', 1.0))
         self.n_playouts = int(kwargs.get('n_playouts', 100))
         self.use_dirichlet = bool(kwargs.get('use_dirichlet', True))
+        self.use_puct = bool(kwargs.get('use_puct', True))
         self.root = Node(None, 0.0)
         self.policy_fn = policy_fn
 
@@ -137,6 +142,17 @@ class MCTS:
         @return:
         """
         if self.root.is_leaf():
-            self.root = Node(None, 0.0)
+            self.root = Node(None, 0.0,use_puct=self.use_puct)
         else:
             self.root = self.root.children[action]
+
+    @staticmethod
+    def random_rollout(state):
+        working_state = state.clone()
+        starting_player = working_state.current_player()
+        while not working_state.is_terminal():
+            action = np.random.choice(working_state.legal_actions())
+            working_state.apply_action(action)
+        leaf_value = working_state.player_return(starting_player)
+        prior_ps = np.ones(7)
+        return prior_ps, leaf_value
