@@ -142,12 +142,12 @@ class Trainer:
         @return:
         """
         # Generate new training samples
-        # print("Generating Data")
+        print("Generating Data")
         # start = time.time()
         # for i in range(n_games):
         #     print("Game " + str(i) + " / " + str(n_games))
         #     examples = play_game_self(self.current_net.predict)
-        #     #self.buffer.append(examples)
+        #     self.buffer.append(examples)
         # print("Finished Generating Data (normal)")
         # print(time.time()-start)
 

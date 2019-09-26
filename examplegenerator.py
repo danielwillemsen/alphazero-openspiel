@@ -15,7 +15,6 @@ import copy
 def generate_single_game(conn):
     niceness=os.nice(0)
     os.nice(5-niceness)
-    time.sleep(float(np.random.rand())*10)
     evaluator = Evaluator(conn)
     example = play_game_self(evaluator.evaluate_nn)
     return example
@@ -62,18 +61,19 @@ class Evaluator():
         return pi, vi
 
 
-def handle_gpu(net, parent_conns, is_done):
+def handle_gpu(state_dict, parent_conns, is_done):
     """Thread which continuously pushes items from the gpu_queue to the gpu. This results in multiple games being
     evaluated in a single batch
 
     @return:
     """
-    all_games_finished = False
-    while not all_games_finished:
-        with is_done.get_lock():
-            if is_done.value == 1:
-                all_games_finished = True
-
+    from connect4net import Net
+    net = Net()
+    net.load_state_dict(state_dict)
+    device = torch.device("cuda:0")
+    net.to(device)
+    net.eval()
+    while True:
         reclist = []
         batch = []
         for conn in parent_conns:
@@ -81,13 +81,12 @@ def handle_gpu(net, parent_conns, is_done):
                 reclist.append(conn)
                 batch.append(conn.recv())
         if batch:
-            batch = torch.from_numpy(np.array(batch)).float().to(net.device)
+            batch = torch.from_numpy(np.array(batch)).float().to(device)
             p_t, v_t = net.forward(batch)
             p_t_list = p_t.tolist()
             v_t_list = v_t.tolist()
             for i in range(len(p_t_list)):
                 reclist[i].send((p_t_list[i], v_t_list[i]))
-    return
 
 
 class ExampleGenerator:
@@ -101,7 +100,7 @@ class ExampleGenerator:
         return
 
 
-    def start_pool(self, n_games, game_fn, *args):
+    def start_pool(self, n_games, game_fn, state_dict):
         is_done = multiprocessing.Value('i', 0)
         parent_conns = []
         child_conns = []
@@ -109,25 +108,23 @@ class ExampleGenerator:
             parent_conn, child_conn = multiprocessing.Pipe()
             parent_conns.append(parent_conn)
             child_conns.append(child_conn)
-        time.sleep(2.0)
         pool = multiprocessing.Pool(processes=10, initializer=np.random.seed)
-        gpu_handler = multiprocessing.Process(target=handle_gpu, args=(copy.deepcopy(self.net), parent_conns, is_done))
+        gpu_handler = multiprocessing.Process(target=handle_gpu, args=(state_dict, parent_conns, is_done))
         gpu_handler.start()
         examples = pool.map_async(game_fn, child_conns)
         return [gpu_handler, pool, examples, is_done, child_conns, parent_conns]
 
     def run_games(self, n_games, game_fn):
-        n_pools = 5
+        state_dict = self.net.state_dict()
+        n_pools = 10
         pools = []
         examples = []
         for i in range(n_pools):
-            pools.append(self.start_pool(int(n_games / n_pools), game_fn))
+            pools.append(self.start_pool(int(n_games / n_pools), game_fn, state_dict))
         for i in range(n_pools):
             examples.append(pools[i][2].get())
             pools[i][1].close()
-            with pools[i][3].get_lock():
-                pools[i][3].value = 1
-            pools[i][0].join()
+            pools[i][0].terminate()
             pools[i][1].join()
         niceness = os.nice(0)
         os.nice(0 - niceness)
