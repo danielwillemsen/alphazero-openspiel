@@ -116,7 +116,7 @@ class ExampleGenerator:
 
     def run_games(self, n_games, game_fn):
         state_dict = self.net.state_dict()
-        n_pools = 10
+        n_pools = 5
         pools = []
         examples = []
         for i in range(n_pools):
@@ -125,6 +125,7 @@ class ExampleGenerator:
             examples.append(pools[i][2].get())
             pools[i][1].close()
             pools[i][0].terminate()
+            pools[i][0].join()
             pools[i][1].join()
         niceness = os.nice(0)
         os.nice(0 - niceness)
