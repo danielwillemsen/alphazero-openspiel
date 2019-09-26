@@ -6,14 +6,15 @@ import numpy as np
 import pyspiel
 import torch
 import torch.nn as nn
+from torch import multiprocessing
 from open_spiel.python.algorithms import mcts
 
 from alphazerobot import AlphaZeroBot, NeuralNetBot
 from connect4net import Net
 from examplegenerator import ExampleGenerator
+from examplegenerator import test_net_game_vs_mcts100, test_net_game_vs_mcts200, test_zero_game_vs_mcts200
 from mctsagent import MCTSAgent
 from game_utils import *
-
 
 class Trainer:
     def __init__(self):
@@ -26,13 +27,13 @@ class Trainer:
         self.board_width = 7
         self.board_height = 6
         self.n_in_row = 4
-        self.n_games_per_generation = 250
-        self.batches_per_generation = 1000
-        self.n_games_buffer = 2500
+        self.n_games_per_generation = 500
+        self.batches_per_generation = 2000
+        self.n_games_buffer = 20000
         self.buffer = []
         self.n_tests = 100
         self.use_gpu = True
-        self.batch_size = 32
+        self.batch_size = 64
         self.lr = 0.0002
         self.games_played = 0
         self.criterion_policy = nn.BCELoss()
@@ -141,12 +142,12 @@ class Trainer:
         @return:
         """
         # Generate new training samples
-        # print("Generating Data")
+        print("Generating Data")
         # start = time.time()
         # for i in range(n_games):
-        # 	print("Game " + str(i) + " / " + str(n_games))
-        # 	examples = Examplegenerator.play_game_self(self.current_net.predict)
-        # 	self.buffer.append(examples)
+        #     print("Game " + str(i) + " / " + str(n_games))
+        #     examples = play_game_self(self.current_net.predict)
+        #     self.buffer.append(examples)
         # print("Finished Generating Data (normal)")
         # print(time.time()-start)
 
@@ -174,6 +175,10 @@ class Trainer:
     def test_agent(self):
         start = time.time()
         print("Testing...")
+        generator = ExampleGenerator(self.current_net, board_width=self.board_width,
+                                     board_height=self.board_height,
+                                     n_in_row=self.n_in_row,
+                                     use_gpu=self.use_gpu)
         self.test_data['games_played'].append(self.games_played)
         # score_tot = 0.
         # for i in range(self.n_tests):
@@ -199,28 +204,16 @@ class Trainer:
         # avg = score_tot / (2 * self.n_tests)
         # self.test_data['zero_vs_mcts100'].append(avg)
         # print("Average score vs mcts100:" + str(avg))
-        score_tot = 0.
-        for i in range(self.n_tests):
-            score1, score2 = test_net_vs_mcts(self.current_net.predict, 100)
-            score_tot += score1
-            score_tot += score2
-        avg = score_tot / (2 * self.n_tests)
+
+        avg = generator.generate_mcts_tests(self.n_tests, test_net_game_vs_mcts100)
         self.test_data['net_vs_mcts100'].append(avg)
         print("Average score vs mcts100 (net only):" + str(avg))
-        score_tot = 0.
-        for i in range(self.n_tests):
-            score1, score2 = test_zero_vs_mcts(self.current_net.predict, 200)
-            score_tot += score1
-            score_tot += score2
-        avg = score_tot / (2 * self.n_tests)
+
+        avg = generator.generate_mcts_tests(self.n_tests, test_zero_game_vs_mcts200)
         self.test_data['zero_vs_mcts200'].append(avg)
         print("Average score vs mcts200:" + str(avg))
-        score_tot = 0.
-        for i in range(self.n_tests):
-            score1, score2 = test_net_vs_mcts(self.current_net.predict, 200)
-            score_tot += score1
-            score_tot += score2
-        avg = score_tot / (2 * self.n_tests)
+
+        avg = generator.generate_mcts_tests(self.n_tests, test_net_game_vs_mcts200)
         self.test_data['net_vs_mcts200'].append(avg)
         print("Average score vs mcts200 (net only):" + str(avg))
         with open("logs/" + self.start_time + str(self.name) + ".p", 'wb') as f:
@@ -247,5 +240,6 @@ class Trainer:
 
 
 if __name__ == '__main__':
+    multiprocessing.set_start_method('spawn')
     trainer = Trainer()
     trainer.run()

@@ -4,7 +4,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+from state_to_board import state_to_board
 
 class Net(nn.Module):
     """Neural network for connect_four.
@@ -30,9 +30,9 @@ class Net(nn.Module):
         # self.bn5 = nn.BatchNorm2d(50)
         # self.conv6 = nn.Conv2d(50, 50, (4, 4), padding=1)
         # self.bn6 = nn.BatchNorm2d(50)
-        self.fc1 = nn.Linear(self.height * self.width * 50, 100)
-        self.fc1_bn = nn.BatchNorm1d(100)
-        self.fc2 = nn.Linear(100, self.width + 1)
+        self.fc1 = nn.Linear(self.height * self.width * 50, 50)
+        self.fc1_bn = nn.BatchNorm1d(50)
+        self.fc2 = nn.Linear(50, self.width + 1)
         return
 
     def forward(self, x):
@@ -52,7 +52,7 @@ class Net(nn.Module):
         x = F.leaky_relu(self.fc1_bn(self.fc1(x)))
         x = self.fc2(x)
         xp, v = x.split(self.width, 1)
-        return F.softmax(xp), F.tanh(v)
+        return F.softmax(xp, dim=1), torch.tanh(v)
 
     def predict(self, state):
         """
@@ -60,7 +60,7 @@ class Net(nn.Module):
         @param state: state to predict next move for
         @return: List of policy and the value
         """
-        board = self.state_to_board(state)
+        board = state_to_board(state)
 
         with torch.no_grad():
             tens = torch.from_numpy(board).float().to(self.device)
@@ -69,16 +69,3 @@ class Net(nn.Module):
             ps = p_t.tolist()[0]
             v = float(v_t)
         return ps, v
-
-    @staticmethod
-    def state_to_board(state):
-        """Converts the openspiel state representation of a board to a representation suitable for the neural network.
-
-        :param state: openspiel state representation of the board
-        :return: neural network suitable representation of the board
-        """
-        board = np.asarray(state.information_state_as_normalized_vector()).reshape((3, 6, 7))
-        if state.current_player() == 0:
-            board[[2, 1]] = board[[1, 2]]
-        board = np.flip(board, 1).copy()
-        return board
