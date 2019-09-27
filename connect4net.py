@@ -4,7 +4,19 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from state_to_board import state_to_board
+
+
+def state_to_board(state, state_shape):
+    """Converts the openspiel state representation of a board to a representation suitable for the neural network.
+
+    :param state: openspiel state representation of the board
+    :return: neural network suitable representation of the board
+    """
+    board = np.asarray(state.information_state_as_normalized_vector()).reshape(state_shape)
+    if state.current_player() == 0:
+        board[[2, 1]] = board[[1, 2]]
+    return board
+
 
 class Net(nn.Module):
     """Neural network for connect_four.
@@ -12,13 +24,18 @@ class Net(nn.Module):
     The output is a vector of size width, for the policy and an additional scalar for the value.
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, state_shape, num_distinct_actions, **kwargs):
         super(Net, self).__init__()
-        self.width = int(kwargs.get('width', 7))
-        self.height = int(kwargs.get('height', 6))
+        self.state_shape = state_shape
+        self.num_states = state_shape[0]
+        self.height = state_shape[1]
+        self.width = state_shape[2]
+        self.num_distinct_actions = num_distinct_actions
+
         self.device = kwargs.get('device', torch.device('cpu'))
         self.time1 = time.time()
-        self.conv1 = nn.Conv2d(3, 50, 3, padding=1)
+
+        self.conv1 = nn.Conv2d(self.num_states, 50, 3, padding=1)
         self.bn1 = nn.BatchNorm2d(50)
         self.conv2 = nn.Conv2d(50, 50, 3, padding=1)
         self.bn2 = nn.BatchNorm2d(50)
@@ -32,7 +49,7 @@ class Net(nn.Module):
         # self.bn6 = nn.BatchNorm2d(50)
         self.fc1 = nn.Linear(self.height * self.width * 50, 50)
         self.fc1_bn = nn.BatchNorm1d(50)
-        self.fc2 = nn.Linear(50, self.width + 1)
+        self.fc2 = nn.Linear(50, self.num_distinct_actions + 1)
         return
 
     def forward(self, x):
@@ -51,7 +68,7 @@ class Net(nn.Module):
         x = x.view(-1, (self.height) * (self.width) * 50)
         x = F.leaky_relu(self.fc1_bn(self.fc1(x)))
         x = self.fc2(x)
-        xp, v = x.split(self.width, 1)
+        xp, v = x.split(self.num_distinct_actions, 1)
         return F.softmax(xp, dim=1), torch.tanh(v)
 
     def predict(self, state):
@@ -60,7 +77,7 @@ class Net(nn.Module):
         @param state: state to predict next move for
         @return: List of policy and the value
         """
-        board = state_to_board(state)
+        board = state_to_board(state, self.state_shape)
 
         with torch.no_grad():
             tens = torch.from_numpy(board).float().to(self.device)

@@ -72,7 +72,8 @@ class MCTS:
     """Main Monte-Carlo tree class. Should be kept during the whole game.
     """
 
-    def __init__(self, policy_fn, **kwargs):
+    def __init__(self, policy_fn, num_distinct_actions, **kwargs):
+        self.num_distinct_actions = num_distinct_actions
         self.c_puct = float(kwargs.get('c_puct', 1.0))
         self.n_playouts = int(kwargs.get('n_playouts', 100))
         self.use_dirichlet = bool(kwargs.get('use_dirichlet', True))
@@ -146,13 +147,12 @@ class MCTS:
         else:
             self.root = self.root.children[action]
 
-    @staticmethod
-    def random_rollout(state):
+    def random_rollout(self, state):
         working_state = state.clone()
         starting_player = working_state.current_player()
         while not working_state.is_terminal():
             action = np.random.choice(working_state.legal_actions())
             working_state.apply_action(action)
         leaf_value = working_state.player_return(starting_player)
-        prior_ps = np.ones(7)
+        prior_ps = np.ones(self.num_distinct_actions)
         return prior_ps, leaf_value

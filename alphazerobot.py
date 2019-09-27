@@ -10,8 +10,8 @@ def remove_illegal_actions(action_probabilities, legal_actions):
     action_probabilities[~legal_actions_arr] = 0.0
 
     # Check if any of the legal actions actually does have a probability >0.
-    if sum(action_probabilities) > 1e-6:
-        action_probabilities = action_probabilities / sum(action_probabilities)
+    if np.sum(action_probabilities) > 1e-6:
+        action_probabilities = action_probabilities / np.sum(action_probabilities)
     else:
         action_probabilities = np.zeros(len(action_probabilities))
         action_probabilities[legal_actions] = 1. / len(legal_actions)
@@ -25,9 +25,10 @@ class AlphaZeroBot(pyspiel.Bot):
 
     def __init__(self, game, player, policy_fn, self_play=False, keep_search_tree=True, **kwargs):
         super(AlphaZeroBot, self).__init__(game, player)
+        self.num_distinct_actions = game.num_distinct_actions()
         self.policy_fn = policy_fn
         self.kwargs = kwargs
-        self.mcts = MCTS(self.policy_fn, **kwargs)
+        self.mcts = MCTS(self.policy_fn, self.num_distinct_actions, **kwargs)
         self.self_play = self_play
         self.keep_search_tree = keep_search_tree
 
@@ -46,7 +47,7 @@ class AlphaZeroBot(pyspiel.Bot):
                     self.mcts.update_root(action_history[-1])
         # Create a new MCTS search tree
         else:
-            self.mcts = MCTS(self.policy_fn, **self.kwargs)
+            self.mcts = MCTS(self.policy_fn, self.num_distinct_actions, **self.kwargs)
 
         # Perform the MCTS
         action_probabilities = np.array(self.mcts.search(state))

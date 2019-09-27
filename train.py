@@ -18,16 +18,17 @@ from game_utils import *
 
 class Trainer:
     def __init__(self):
+        self.game_name = "connect_four"
+        self.game = pyspiel.load_game(self.game_name)
+        self.state_shape = self.game.information_state_normalized_vector_shape()
+        self.num_distinct_actions = self.game.num_distinct_actions()
         self.name = "openspieltest"
         self.model_path = "models/"
         self.start_time = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         self.save = True
         self.save_n_gens = 5
         self.test_n_gens = 5
-        self.board_width = 7
-        self.board_height = 6
-        self.n_in_row = 4
-        self.n_games_per_generation = 500
+        self.n_games_per_generation = 250
         self.batches_per_generation = 2000
         self.n_games_buffer = 20000
         self.buffer = []
@@ -48,14 +49,8 @@ class Trainer:
 
         self.device = torch.device("cuda:0" if self.use_gpu else "cpu")
 
-        self.current_net = Net(width=self.board_width, height=self.board_height, device=self.device)
+        self.current_net = Net(self.state_shape, self.num_distinct_actions, device=self.device)
         self.current_net.to(self.device)
-
-        self.current_agent = MCTSAgent(self.current_net.predict,
-                                       board_width=self.board_width,
-                                       board_height=self.board_height,
-                                       n_in_row=self.n_in_row,
-                                       use_gpu=self.use_gpu)
         self.optimizer = torch.optim.Adam(self.current_net.parameters(), lr=self.lr, weight_decay=0.0001)
 
     def net_step(self, flattened_buffer):
@@ -154,10 +149,8 @@ class Trainer:
         start = time.time()
 
         # Generate the examples
-        generator = ExampleGenerator(self.current_net, board_width=self.board_width,
-                                     board_height=self.board_height,
-                                     n_in_row=self.n_in_row,
-                                     use_gpu=self.use_gpu)
+        generator = ExampleGenerator(self.current_net, self.game_name,
+                                     self.device)
         games = generator.generate_examples(n_games)
         self.games_played += self.n_games_per_generation
 
@@ -175,14 +168,12 @@ class Trainer:
     def test_agent(self):
         start = time.time()
         print("Testing...")
-        generator = ExampleGenerator(self.current_net, board_width=self.board_width,
-                                     board_height=self.board_height,
-                                     n_in_row=self.n_in_row,
-                                     use_gpu=self.use_gpu)
+        generator = ExampleGenerator(self.current_net, self.game_name,
+                                     self.device)
         self.test_data['games_played'].append(self.games_played)
         # score_tot = 0.
         # for i in range(self.n_tests):
-        #     score1, score2 = test_zero_vs_random(self.current_net.predict)
+        #     score1, score2 = test_zero_vs_random(self.current_net.predict, self.game_name)
         #     score_tot += score1
         #     score_tot += score2
         # avg = score_tot / (2 * self.n_tests)
@@ -190,20 +181,20 @@ class Trainer:
         # print("Average score vs random:" + str(avg))
         score_tot = 0.
         for i in range(self.n_tests):
-            score1, score2 = test_net_vs_random(self.current_net.predict)
+            score1, score2 = test_net_vs_random(self.current_net.predict, self.game_name)
             score_tot += score1
             score_tot += score2
         avg = score_tot / (2 * self.n_tests)
         self.test_data['net_vs_random'].append(avg)
         print("Average score vs random (net only):" + str(avg))
-        # score_tot = 0.
-        # for i in range(self.n_tests):
-        #     score1, score2 = test_zero_vs_mcts(self.current_net.predict, 100)
-        #     score_tot += score1
-        #     score_tot += score2
-        # avg = score_tot / (2 * self.n_tests)
-        # self.test_data['zero_vs_mcts100'].append(avg)
-        # print("Average score vs mcts100:" + str(avg))
+        score_tot = 0.
+        for i in range(self.n_tests):
+            score1, score2 = test_zero_vs_mcts(self.current_net.predict, 100, self.game_name)
+            score_tot += score1
+            score_tot += score2
+        avg = score_tot / (2 * self.n_tests)
+        self.test_data['zero_vs_mcts100'].append(avg)
+        print("Average score vs mcts100:" + str(avg))
 
         avg = generator.generate_mcts_tests(self.n_tests, test_net_game_vs_mcts100)
         self.test_data['net_vs_mcts100'].append(avg)

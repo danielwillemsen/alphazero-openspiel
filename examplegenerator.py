@@ -8,45 +8,58 @@ import os
 from alphazerobot import AlphaZeroBot
 from connect4net import Net
 from game_utils import play_game_self, test_zero_vs_mcts, test_net_vs_mcts
-from state_to_board import state_to_board
+from connect4net import state_to_board
 import copy
 
 
-def generate_single_game(conn):
+def generate_single_game(tup):
+    conn = tup[0]
+    game_name = tup[1]
+    game = pyspiel.load_game(game_name)
     niceness=os.nice(0)
     os.nice(5-niceness)
-    evaluator = Evaluator(conn)
-    example = play_game_self(evaluator.evaluate_nn)
+    evaluator = Evaluator(conn, game)
+    example = play_game_self(evaluator.evaluate_nn, game_name)
     return example
 
 
-def test_net_game_vs_mcts100(conn):
+def test_net_game_vs_mcts100(tup):
+    conn = tup[0]
+    game_name = tup[1]
+    game = pyspiel.load_game(game_name)
     niceness=os.nice(0)
     os.nice(5-niceness)
-    evaluator = Evaluator(conn)
-    score1, score2 = test_net_vs_mcts(evaluator.evaluate_nn, 100)
+    evaluator = Evaluator(conn, game)
+    score1, score2 = test_net_vs_mcts(evaluator.evaluate_nn, 100, game_name)
     return score1 + score2
 
 
-def test_net_game_vs_mcts200(conn):
+def test_net_game_vs_mcts200(tup):
+    conn = tup[0]
+    game_name = tup[1]
+    game = pyspiel.load_game(game_name)
     niceness=os.nice(0)
     os.nice(5-niceness)
-    evaluator = Evaluator(conn)
-    score1, score2 = test_net_vs_mcts(evaluator.evaluate_nn, 200)
+    evaluator = Evaluator(conn, game)
+    score1, score2 = test_net_vs_mcts(evaluator.evaluate_nn, 200, game_name)
     return score1 + score2
 
 
-def test_zero_game_vs_mcts200(conn):
-    niceness=os.nice(0)
+def test_zero_game_vs_mcts200(tup):
+    conn = tup[0]
+    game_name = tup[1]
+    game = pyspiel.load_game(game_name)
+    niceness = os.nice(0)
     os.nice(5-niceness)
-    evaluator = Evaluator(conn)
-    score1, score2 = test_zero_vs_mcts(evaluator.evaluate_nn, 200)
+    evaluator = Evaluator(conn, game)
+    score1, score2 = test_zero_vs_mcts(evaluator.evaluate_nn, 200, game_name)
     return score1 + score2
 
 
 class Evaluator():
-    def __init__(self, conn):
+    def __init__(self, conn, game):
         self.conn = conn
+        self.state_shape = game.information_state_normalized_vector_shape()
 
     def evaluate_nn(self, state):
         """
@@ -54,25 +67,19 @@ class Evaluator():
         @param state: The game which needs to be evaluated
         @return: pi: policy according to neural net, vi: value according to neural net.
         """
-        board = state_to_board(state)
+        board = state_to_board(state, self.state_shape)
         self.conn.send(board)
         pi, vi = self.conn.recv()
         vi = float(vi[0])
         return pi, vi
 
 
-def handle_gpu(state_dict, parent_conns, is_done):
+def handle_gpu(net, parent_conns, device):
     """Thread which continuously pushes items from the gpu_queue to the gpu. This results in multiple games being
     evaluated in a single batch
 
     @return:
     """
-    from connect4net import Net
-    net = Net()
-    net.load_state_dict(state_dict)
-    device = torch.device("cuda:0")
-    net.to(device)
-    net.eval()
     while True:
         reclist = []
         batch = []
@@ -90,7 +97,9 @@ def handle_gpu(state_dict, parent_conns, is_done):
 
 
 class ExampleGenerator:
-    def __init__(self, net, **kwargs):
+    def __init__(self, net, game_name, device, **kwargs):
+        self.device = device
+        self.game_name = game_name
         self.kwargs = kwargs
         self.net = net
         self.examples = []
@@ -99,34 +108,31 @@ class ExampleGenerator:
         self.v = dict()
         return
 
-
-    def start_pool(self, n_games, game_fn, state_dict):
-        is_done = multiprocessing.Value('i', 0)
+    def start_pool(self, n_games, game_fn):
         parent_conns = []
         child_conns = []
         for i in range(n_games):
             parent_conn, child_conn = multiprocessing.Pipe()
             parent_conns.append(parent_conn)
             child_conns.append(child_conn)
-        pool = multiprocessing.Pool(processes=10, initializer=np.random.seed)
-        gpu_handler = multiprocessing.Process(target=handle_gpu, args=(state_dict, parent_conns, is_done))
+        pool = multiprocessing.Pool(processes=25, initializer=np.random.seed)
+        gpu_handler = multiprocessing.Process(target=handle_gpu, args=(self.net, parent_conns, self.device))
         gpu_handler.start()
-        examples = pool.map_async(game_fn, child_conns)
-        return [gpu_handler, pool, examples, is_done, child_conns, parent_conns]
+        examples = pool.map_async(game_fn, [(conn, self.game_name) for conn in child_conns])
+        return [gpu_handler, pool, examples, child_conns, parent_conns]
 
     def run_games(self, n_games, game_fn):
-        state_dict = self.net.state_dict()
-        n_pools = 5
+        n_pools = 2
         pools = []
         examples = []
         for i in range(n_pools):
-            pools.append(self.start_pool(int(n_games / n_pools), game_fn, state_dict))
+            pools.append(self.start_pool(int(n_games / n_pools), game_fn))
         for i in range(n_pools):
             examples.append(pools[i][2].get())
             pools[i][1].close()
+            pools[i][1].join()
             pools[i][0].terminate()
             pools[i][0].join()
-            pools[i][1].join()
         niceness = os.nice(0)
         os.nice(0 - niceness)
         return examples
