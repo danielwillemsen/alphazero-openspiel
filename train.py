@@ -30,13 +30,15 @@ class Trainer:
         self.use_gpu = True                     # Use GPU (if available)
 
         # Algorithm Parameters
-        self.n_games_per_generation = 250         # How many games to generate per iteration
+        self.n_games_per_generation = 25        # How many games to generate per iteration
         self.n_batches_per_generation = 2000    # How batches of neural network training per iteration
-        self.n_games_buffer = 20000             # How many games to store in FIFO buffer
+        self.n_games_buffer_max = 20000         # How many games to store in FIFO buffer, at most. Buffer is grown.
         self.batch_size = 64                    # Batch size for neural network training
         self.lr = 0.0002                        # Learning rate for neural network
+        self.n_games_buffer = 4 * self.n_games_per_generation
 
         # Initialization of the trainer
+        self.generation = 0
         self.game = pyspiel.load_game(self.name_game)
         self.buffer = []
         self.num_distinct_actions = self.game.num_distinct_actions()
@@ -46,7 +48,6 @@ class Trainer:
         self.start_time = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         self.test_data = {'games_played': [], 'zero_vs_random': [], 'zero_vs_mcts100': [], 'zero_vs_mcts200': [],
                           'net_vs_random': [], 'net_vs_mcts100': [], 'net_vs_mcts200': []}
-
         # Setup CUDA if possible
         if self.use_gpu:
             if not torch.cuda.is_available():
@@ -184,7 +185,8 @@ class Trainer:
         for examples in games:
             self.buffer.append(examples)
         logger.info("Finished Generating Data (threaded). Took: " + str(time.time() - start) + " seconds")
-
+        logger.info("Total amount of games played:" + str(self.generation*self.n_games_per_generation))
+        self.update_buffer_size()
         # Remove oldest entries from buffer if too long
         if len(self.buffer) > self.n_games_buffer:
             logger.info("Buffer full. Deleting oldest samples.")
@@ -218,14 +220,14 @@ class Trainer:
         avg = score_tot / (2 * self.n_tests)
         self.test_data['net_vs_random'].append(avg)
         logger.info("Average score vs random (net only):" + str(avg))
-        score_tot = 0.
-        for i in range(self.n_tests):
-            score1, score2 = test_zero_vs_mcts(self.current_net.predict, 100, self.name_game)
-            score_tot += score1
-            score_tot += score2
-        avg = score_tot / (2 * self.n_tests)
-        self.test_data['zero_vs_mcts100'].append(avg)
-        logger.info("Average score vs mcts100:" + str(avg))
+        # score_tot = 0.
+        # for i in range(self.n_tests):
+        #     score1, score2 = test_zero_vs_mcts(self.current_net.predict, 100, self.name_game)
+        #     score_tot += score1
+        #     score_tot += score2
+        # avg = score_tot / (2 * self.n_tests)
+        # self.test_data['zero_vs_mcts100'].append(avg)
+        # logger.info("Average score vs mcts100:" + str(avg))
 
         avg = generator.generate_mcts_tests(self.n_tests, test_net_game_vs_mcts100)
         self.test_data['net_vs_mcts100'].append(avg)
@@ -248,23 +250,26 @@ class Trainer:
         @return:
         """
         self.test_agent()         # Start with testing the agent
-        generation = 0
         while True:
-            generation += 1
-            logger.info("Generation:" + str(generation))
+            self.generation += 1
+            logger.info("Generation:" + str(self.generation))
             self.generate_examples(self.n_games_per_generation)         # Generate new games through self-play
             self.train_network(self.n_batches_per_generation)           # Train network on games in the buffer
 
             # Perform testing periodically
-            if generation % self.test_n_gens == 0:                      # Test the alphaZero bot against MCTS bots
+            if self.generation % self.test_n_gens == 0:                      # Test the alphaZero bot against MCTS bots
                 self.test_agent()
 
             # Periodically save network
-            if self.save and generation % self.save_n_gens == 0:
+            if self.save and self.generation % self.save_n_gens == 0:
                 logger.info("Saving network")
-                torch.save(self.current_net.state_dict(), self.model_path + self.name_run + str(generation) + ".pth")
+                torch.save(self.current_net.state_dict(), self.model_path + self.name_run + str(self.generation) + ".pth")
                 logger.info("Network saved")
 
+    def update_buffer_size(self):
+        if self.generation % 2 == 0 and self.n_games_buffer < self.n_games_buffer_max:
+            self.n_games_buffer += self.n_games_per_generation
+        logger.info("Buffer size:" + str(self.n_games_buffer))
 
 if __name__ == '__main__':
     logger = logging.getLogger('alphazero')

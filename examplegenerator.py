@@ -116,7 +116,7 @@ class ExampleGenerator:
             parent_conn, child_conn = multiprocessing.Pipe()
             parent_conns.append(parent_conn)
             child_conns.append(child_conn)
-        pool = multiprocessing.Pool(processes=25, initializer=np.random.seed)
+        pool = multiprocessing.Pool(processes=2, initializer=np.random.seed)
         gpu_handler = multiprocessing.Process(target=handle_gpu, args=(self.net, parent_conns, self.device))
         gpu_handler.start()
         examples = pool.map_async(game_fn, [(conn, self.game_name) for conn in child_conns])
