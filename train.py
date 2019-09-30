@@ -24,18 +24,19 @@ class Trainer:
         self.name_run = "openspieltest"         # Name of run
         self.model_path = "models/"             # Path to save the models
         self.save = True                        # Save neural network
-        self.save_n_gens = 5                    # How many iterations until network save
-        self.test_n_gens = 5                    # How many iterations until testing
-        self.n_tests = 4                        # How many tests to perform for testing
+        self.save_n_gens = 10                   # How many iterations until network save
+        self.test_n_gens = 10                    # How many iterations until testing
+        self.n_tests = 200                      # How many tests to perform for testing
         self.use_gpu = True                     # Use GPU (if available)
 
         # Algorithm Parameters
-        self.n_games_per_generation = 25        # How many games to generate per iteration
+        self.n_games_per_generation = 500        # How many games to generate per iteration
         self.n_batches_per_generation = 2000    # How batches of neural network training per iteration
         self.n_games_buffer_max = 20000         # How many games to store in FIFO buffer, at most. Buffer is grown.
         self.batch_size = 64                    # Batch size for neural network training
         self.lr = 0.0002                        # Learning rate for neural network
         self.n_games_buffer = 4 * self.n_games_per_generation
+
 
         # Initialization of the trainer
         self.generation = 0
@@ -48,6 +49,19 @@ class Trainer:
         self.start_time = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         self.test_data = {'games_played': [], 'zero_vs_random': [], 'zero_vs_mcts100': [], 'zero_vs_mcts200': [],
                           'net_vs_random': [], 'net_vs_mcts100': [], 'net_vs_mcts200': []}
+        # Initialize logger
+        formatter = logging.Formatter('%(asctime)s %(message)s')
+        logger.setLevel('DEBUG')
+        fh = logging.FileHandler("logs/" + str(self.start_time) + str(self.name_run) + ".log")
+        fh.setFormatter(formatter)
+        fh.setLevel('INFO')
+        ch = logging.StreamHandler()
+        ch.setLevel('INFO')
+        ch.setFormatter(formatter)
+        logger.addHandler(ch)
+        logger.addHandler(fh)
+        logger.info('Logger started')
+        logger.info(str(torch.cuda.is_available()))
         # Setup CUDA if possible
         if self.use_gpu:
             if not torch.cuda.is_available():
@@ -63,19 +77,9 @@ class Trainer:
         self.criterion_value = nn.MSELoss()
         self.current_net.eval()
 
-        # Initialize logger
-        formatter = logging.Formatter('%(asctime)s %(message)s')
-        logger.setLevel('DEBUG')
-        fh = logging.FileHandler("logs/" + str(self.start_time) + str(self.name_run) + ".log")
-        fh.setFormatter(formatter)
-        fh.setLevel('INFO')
-        ch = logging.StreamHandler()
-        ch.setLevel('INFO')
-        ch.setFormatter(formatter)
-        logger.addHandler(ch)
-        logger.addHandler(fh)
-        logger.info('Logger started')
+
         logger.info(self.__dict__)
+        logger.info("Using:" + str(self.device))
 
     def net_step(self, flattened_buffer):
         """Samples a random batch and updates the NN parameters with this bat
@@ -168,7 +172,7 @@ class Trainer:
         # start = time.time()
         # for i in range(n_games):
         #     logger.info("Game " + str(i) + " / " + str(n_games))
-        #     examples = play_game_self(self.current_net.predict)
+        #     examples = play_game_self(self.current_net.predict, self.name_game)
         #     self.buffer.append(examples)
         # logger.info("Finished Generating Data (normal)")
         # logger.info(time.time()-start)

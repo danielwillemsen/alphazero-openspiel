@@ -81,6 +81,7 @@ def handle_gpu(net, parent_conns, device):
 
     @return:
     """
+    net.to(device)
     while True:
         reclist = []
         batch = []
@@ -99,35 +100,42 @@ def handle_gpu(net, parent_conns, device):
 
 class ExampleGenerator:
     def __init__(self, net, game_name, device, **kwargs):
+        self.device_count = torch.cuda.device_count()
+        self.net = copy.deepcopy(net)
+        self.net.to("cpu")
         self.device = device
         self.game_name = game_name
         self.kwargs = kwargs
-        self.net = net
         self.examples = []
         self.gpu_queue = dict()
         self.ps = dict()
         self.v = dict()
         return
 
-    def start_pool(self, n_games, game_fn):
+    def start_pool(self, n_games, game_fn, device):
         parent_conns = []
         child_conns = []
         for i in range(n_games):
             parent_conn, child_conn = multiprocessing.Pipe()
             parent_conns.append(parent_conn)
             child_conns.append(child_conn)
-        pool = multiprocessing.Pool(processes=2, initializer=np.random.seed)
-        gpu_handler = multiprocessing.Process(target=handle_gpu, args=(self.net, parent_conns, self.device))
+        pool = multiprocessing.Pool(processes=50, initializer=np.random.seed)
+        gpu_handler = multiprocessing.Process(target=handle_gpu, args=(copy.deepcopy(self.net), parent_conns, device))
         gpu_handler.start()
         examples = pool.map_async(game_fn, [(conn, self.game_name) for conn in child_conns])
         return [gpu_handler, pool, examples, child_conns, parent_conns]
 
     def run_games(self, n_games, game_fn):
-        n_pools = 2
+        n_pools = 4
         pools = []
         examples = []
+        device_no = 1
         for i in range(n_pools):
-            pools.append(self.start_pool(int(n_games / n_pools), game_fn))
+            if device_no>=self.device_count:
+                device_no = 0
+            device = torch.device("cuda:" + str(device_no) if self.device_count >= 1 else "cpu")
+            pools.append(self.start_pool(int(n_games / n_pools), game_fn, device))
+            device_no += 1
         for i in range(n_pools):
             examples.append(pools[i][2].get())
             pools[i][1].close()
