@@ -10,7 +10,8 @@ from connect4net import Net
 from game_utils import play_game_self, test_zero_vs_mcts, test_net_vs_mcts
 from connect4net import state_to_board
 import copy
-
+import logging
+logger = logging.getLogger('alphazero')
 
 def generate_single_game(tup):
     conn = tup[0]
@@ -147,7 +148,7 @@ class ExampleGenerator:
 
         examples_temp = self.run_games(n_games, generate_single_game)
         examples = [item for sublist in examples_temp for item in sublist]
-        print("Generated " + str(len(examples)) + " games")
+        logger.info("Generated " + str(len(examples)) + " games")
         return examples
 
     def generate_mcts_tests(self, n_games, game_fn):
@@ -167,7 +168,7 @@ if __name__ == '__main__':
     use_gpu = True
     if use_gpu:
         if not torch.cuda.is_available():
-            print("Tried to use GPU, but none is available")
+            logger.info("Tried to use GPU, but none is available")
             use_gpu = False
     device = torch.device("cuda:0" if use_gpu else "cpu")
     net = Net(device=device)
@@ -178,4 +179,4 @@ if __name__ == '__main__':
     start = time.time()
 
     generator.generate_examples(500)
-    print(time.time() - start)
+    logger.info(time.time() - start)

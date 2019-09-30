@@ -140,8 +140,8 @@ class Game:
             ind = ind + 1
             column = (in_column + ind) % self.width
         # indicating that an invalid move has been attempted
-        print("Warning: Unable to do move, board is full.")
-        print(self.board)
+        logger.info("Warning: Unable to do move, board is full.")
+        logger.info(self.board)
         self.moves.append(-1)
         return
 
@@ -163,4 +163,4 @@ if __name__ == '__main__':
     start = time.time()
     for i in range(12000):
         game.is_winner(1)
-    print(time.time() - start)
+    logger.info(time.time() - start)

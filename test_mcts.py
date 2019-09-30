@@ -28,8 +28,8 @@ from open_spiel.python.algorithms import mcts
 #
 # my_mcts = MCTS(MCTS.random_rollout, n_playouts=n_playouts)
 # my_probs = [item*(n_playouts-1) for item in my_mcts.search(state)]
-# print(my_probs)
-# print(mcts.mcts_search(state, 1, n_playouts, mcts.RandomRolloutEvaluator(25)))
+# logger.info(my_probs)
+# logger.info(mcts.mcts_search(state, 1, n_playouts, mcts.RandomRolloutEvaluator(25)))
 # #
 playout_list = [10, 20, 50, 100, 200]
 scores_list = []
@@ -47,7 +47,7 @@ for n_playouts in playout_list:
         score_tot += score2
     avg = score_tot / (2 * n_tests)
     scores_list.append(avg)
-    print("Average score vs mcts" + str(n_playouts) + ":" + str(avg))
+    logger.info("Average score vs mcts" + str(n_playouts) + ":" + str(avg))
 
 for n_playouts in playout_list:
     score_tot = 0.
@@ -58,7 +58,7 @@ for n_playouts in playout_list:
         score_tot += score2
     avg = score_tot / (2 * n_tests)
     scores_list_keep_tree.append(avg)
-    print("Average score vs mcts" + str(n_playouts) + ":" + str(avg))
+    logger.info("Average score vs mcts" + str(n_playouts) + ":" + str(avg))
 
 for n_playouts in playout_list:
     score_tot = 0.
@@ -69,7 +69,7 @@ for n_playouts in playout_list:
         score_tot += score2
     avg = score_tot / (2 * n_tests)
     scores_list_p.append(avg)
-    print("Average score vs mcts" + str(n_playouts) + ":" + str(avg))
+    logger.info("Average score vs mcts" + str(n_playouts) + ":" + str(avg))
 
 for n_playouts in playout_list:
     score_tot = 0.
@@ -80,7 +80,7 @@ for n_playouts in playout_list:
         score_tot += score2
     avg = score_tot / (2 * n_tests)
     scores_list_p_keep_tree.append(avg)
-    print("Average score vs mcts" + str(n_playouts) + ":" + str(avg))
+    logger.info("Average score vs mcts" + str(n_playouts) + ":" + str(avg))
 
 plt.plot(playout_list, scores_list, label="UCT")
 plt.plot(playout_list, scores_list_keep_tree, label="UCT, tree retained")

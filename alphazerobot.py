@@ -45,6 +45,7 @@ class AlphaZeroBot(pyspiel.Bot):
                 if len(action_history) >= 2:
                     self.mcts.update_root(action_history[-2])
                     self.mcts.update_root(action_history[-1])
+
         # Create a new MCTS search tree
         else:
             self.mcts = MCTS(self.policy_fn, self.num_distinct_actions, **self.kwargs)
@@ -56,7 +57,7 @@ class AlphaZeroBot(pyspiel.Bot):
         legal_actions = state.legal_actions(state.current_player())
         action_probabilities = remove_illegal_actions(action_probabilities, legal_actions)
 
-        # Select the action, either probabilitically or simply the best.
+        # Select the action, either probabilistically or simply the best.
         if self.self_play:
             action = np.random.choice(len(action_probabilities), p=action_probabilities)
         else:

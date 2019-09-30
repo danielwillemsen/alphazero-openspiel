@@ -108,9 +108,6 @@ class MCTS:
         node.update_recursive(-leaf_value)
         return
 
-    def notlegal(self):
-        notlegal = 1
-
     def get_action_probabilities(self):
         """For now simply linear with the amount of visits.
         @todo check how this is done in the alphaZero paper
