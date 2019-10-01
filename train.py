@@ -36,7 +36,7 @@ class Trainer:
         self.batch_size = 64                    # Batch size for neural network training
         self.lr = 0.0002                        # Learning rate for neural network
         self.n_games_buffer = 4 * self.n_games_per_generation
-
+        self.n_playouts_train = 400
 
         # Initialization of the trainer
         self.generation = 0
@@ -181,7 +181,7 @@ class Trainer:
 
         # Generate the examples
         generator = ExampleGenerator(self.current_net, self.name_game,
-                                     self.device)
+                                     self.device, n_playouts=self.n_playouts_train)
         games = generator.generate_examples(n_games)
         self.games_played += self.n_games_per_generation
 

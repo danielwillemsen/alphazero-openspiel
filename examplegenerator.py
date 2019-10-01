@@ -16,44 +16,48 @@ logger = logging.getLogger('alphazero')
 def generate_single_game(tup):
     conn = tup[0]
     game_name = tup[1]
+    kwargs = tup[2]
     game = pyspiel.load_game(game_name)
     niceness=os.nice(0)
     os.nice(5-niceness)
     evaluator = Evaluator(conn, game)
-    example = play_game_self(evaluator.evaluate_nn, game_name)
+    example = play_game_self(evaluator.evaluate_nn, game_name, **kwargs)
     return example
 
 
 def test_net_game_vs_mcts100(tup):
     conn = tup[0]
     game_name = tup[1]
+    kwargs = tup[2]
     game = pyspiel.load_game(game_name)
     niceness=os.nice(0)
     os.nice(5-niceness)
     evaluator = Evaluator(conn, game)
-    score1, score2 = test_net_vs_mcts(evaluator.evaluate_nn, 100, game_name)
+    score1, score2 = test_net_vs_mcts(evaluator.evaluate_nn, 100, game_name, **kwargs)
     return score1 + score2
 
 
 def test_net_game_vs_mcts200(tup):
     conn = tup[0]
     game_name = tup[1]
+    kwargs = tup[2]
     game = pyspiel.load_game(game_name)
     niceness=os.nice(0)
     os.nice(5-niceness)
     evaluator = Evaluator(conn, game)
-    score1, score2 = test_net_vs_mcts(evaluator.evaluate_nn, 200, game_name)
+    score1, score2 = test_net_vs_mcts(evaluator.evaluate_nn, 200, game_name, **kwargs)
     return score1 + score2
 
 
 def test_zero_game_vs_mcts200(tup):
     conn = tup[0]
     game_name = tup[1]
+    kwargs = tup[2]
     game = pyspiel.load_game(game_name)
     niceness = os.nice(0)
     os.nice(5-niceness)
     evaluator = Evaluator(conn, game)
-    score1, score2 = test_zero_vs_mcts(evaluator.evaluate_nn, 200, game_name)
+    score1, score2 = test_zero_vs_mcts(evaluator.evaluate_nn, 200, game_name, **kwargs)
     return score1 + score2
 
 
@@ -122,7 +126,7 @@ class ExampleGenerator:
         pool = multiprocessing.Pool(processes=50, initializer=np.random.seed)
         gpu_handler = multiprocessing.Process(target=handle_gpu, args=(copy.deepcopy(self.net), parent_conns, device))
         gpu_handler.start()
-        examples = pool.map_async(game_fn, [(conn, self.game_name) for conn in child_conns])
+        examples = pool.map_async(game_fn, [(conn, self.game_name, self.kwargs) for conn in child_conns])
         return [gpu_handler, pool, examples, child_conns, parent_conns]
 
     def run_games(self, n_games, game_fn):

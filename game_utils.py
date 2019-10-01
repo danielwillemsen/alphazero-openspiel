@@ -51,7 +51,7 @@ def test_zero_vs_mcts(policy_fn, max_search_nodes, game_name, **kwargs):
     return score1, score2
 
 
-def test_net_vs_mcts(policy_fn, max_search_nodes, game_name):
+def test_net_vs_mcts(policy_fn, max_search_nodes, game_name, **kwargs):
     game = pyspiel.load_game(game_name)
 
     # Alphazero first
@@ -68,7 +68,7 @@ def test_net_vs_mcts(policy_fn, max_search_nodes, game_name):
     return score1, score2
 
 
-def test_net_vs_random(policy_fn, game_name):
+def test_net_vs_random(policy_fn, game_name, **kwargs):
     game = pyspiel.load_game(game_name)
 
     # Alphazero first
@@ -83,13 +83,13 @@ def test_net_vs_random(policy_fn, game_name):
     return score1, score2
 
 
-def play_game_self(policy_fn, game_name):
+def play_game_self(policy_fn, game_name, **kwargs):
     examples = []
     game = pyspiel.load_game(game_name)
     state = game.new_initial_state()
     state_shape = game.information_state_normalized_vector_shape()
     num_distinct_actions = game.num_distinct_actions()
-    alphazero_bot = AlphaZeroBot(game, 0, policy_fn, self_play=True)
+    alphazero_bot = AlphaZeroBot(game, 0, policy_fn, self_play=True, **kwargs)
     while not state.is_terminal():
         policy, action = alphazero_bot.step(state)
         policy_dict = dict(policy)
