@@ -142,6 +142,7 @@ class MCTS:
             self.root = Node(None, 0.0, use_puct=self.use_puct)
         else:
             self.root = self.root.children[action]
+            self.root.parent = None
 
     def random_rollout(self, state):
         working_state = state.clone()
