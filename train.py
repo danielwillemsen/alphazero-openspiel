@@ -31,7 +31,7 @@ class Trainer:
 
         # Algorithm Parameters
         self.n_games_per_generation = 500      # How many games to generate per iteration
-        self.n_batches_per_generation = 400     # How batches of neural network training per iteration
+        self.n_batches_per_generation = 500     # How batches of neural network training per iteration
         self.n_games_buffer_max = 20000         # How many games to store in FIFO buffer, at most. Buffer is grown.
         self.batch_size = 256                   # Batch size for neural network training
         self.lr = 0.001                         # Learning rate for neural network
@@ -126,11 +126,11 @@ class Trainer:
         for i in range(n_batches):
             loss_p, loss_v = self.net_step(flattened_buffer)
             loss_tot_p += loss_p
-            self.v = loss_v
-            loss_tot_v += self.v
-            if i % 200 == 0:
-                logger.info("Batch: " + str(i) + "Loss policy: " + str(loss_tot_p / 200.) + "Loss value: " + str(
-                    loss_tot_v / 200.))
+            v = loss_v
+            loss_tot_v += v
+            if i % 100 == 99:
+                logger.info("Batch: " + str(i) + "Loss policy: " + str(loss_tot_p / 100.) + "Loss value: " + str(
+                    loss_tot_v / 100.))
                 loss_tot_v = 0
                 loss_tot_p = 0
         self.current_net.eval()
