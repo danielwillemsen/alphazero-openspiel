@@ -98,7 +98,7 @@ class MCTS:
         # Expansion
         if not state.is_terminal():
             prior_ps, leaf_value = self.policy_fn(state)
-            node.expand(prior_ps, state.legal_actions(current_player))
+            node.expand(prior_ps, state.legal_actions(state.current_player()))
         else:
             leaf_value = -state.player_return(current_player)
 
