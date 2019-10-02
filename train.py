@@ -36,7 +36,7 @@ class Trainer:
         self.batch_size = 64                    # Batch size for neural network training
         self.lr = 0.0002                        # Learning rate for neural network
         self.n_games_buffer = 4 * self.n_games_per_generation
-        self.n_playouts_train = 400
+        self.n_playouts_train = 100
 
         # Initialization of the trainer
         self.generation = 0

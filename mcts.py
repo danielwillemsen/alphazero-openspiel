@@ -13,14 +13,14 @@ class Node:
 
     def __init__(self, parent, prior_p, use_puct=True):
         self.parent = parent
-        self.children = []
+        self.children = dict()
         self.P = prior_p
         self.Q = 0
         self.N = 0
         self.use_puct = use_puct
 
     def is_leaf(self):
-        return self.children == []
+        return self.children == {}
 
     def is_root(self):
         return self.parent is None
@@ -32,20 +32,19 @@ class Node:
         @param legal_actions: (list) of all legal actions
         @return:
         """
-        value_list = [self.children[i].get_value(c_puct) if i in legal_actions else -float('inf') for i in
-                      range(len(self.children))]
-        action = int(np.argmax(value_list))
+        value_list = {action: child.get_value(c_puct) for action, child in self.children.items()}
+        action = max(value_list, key=value_list.get)
         child = self.children[action]
-        return child, np.argmax(value_list)
+        return child, action
 
-    def expand(self, prior_ps):
+    def expand(self, prior_ps, legal_actions):
         """Expand this node
 
         @param prior_ps: list of prior probabilities (currently only from neural net. In future also from simulation)
         @return:
         """
-        for action in range(len(prior_ps)):
-            self.children.append(Node(self, prior_ps[action], use_puct=self.use_puct))
+        for action in legal_actions:
+            self.children[action] = Node(self, prior_ps[action], use_puct=self.use_puct)
 
     def get_value(self, c_puct):
         """Calculates the value of the node
@@ -99,7 +98,7 @@ class MCTS:
         # Expansion
         if not state.is_terminal():
             prior_ps, leaf_value = self.policy_fn(state)
-            node.expand(prior_ps)
+            node.expand(prior_ps, state.legal_actions(current_player))
         else:
             leaf_value = -state.player_return(current_player)
 
@@ -114,7 +113,7 @@ class MCTS:
 
         @return:
         """
-        visits = [child.N for child in self.root.children]
+        visits = [self.root.children[i].N if i in self.root.children else 0 for i in range(self.num_distinct_actions)]
         return [float(visit) / sum(visits) for visit in visits]
 
     def search(self, state):
@@ -131,7 +130,7 @@ class MCTS:
         prior_ps, leaf_value = self.policy_fn(state)
         if self.use_dirichlet:
             prior_ps = (0.8 * np.array(prior_ps) + 0.2 * np.random.dirichlet(0.3 * np.ones(len(prior_ps)))).tolist()
-        self.root.expand(prior_ps)
+        self.root.expand(prior_ps, state.legal_actions(state.current_player()))
 
     def update_root(self, action):
         """Updates root when new move has been performed.
@@ -140,7 +139,7 @@ class MCTS:
         @return:
         """
         if self.root.is_leaf():
-            self.root = Node(None, 0.0,use_puct=self.use_puct)
+            self.root = Node(None, 0.0, use_puct=self.use_puct)
         else:
             self.root = self.root.children[action]
 
