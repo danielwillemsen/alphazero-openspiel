@@ -40,7 +40,7 @@ class Net(nn.Module):
         self.resblock3 = ResidualBlock(50, 50)
         self.resblock4 = ResidualBlock(50, 50)
         self.resblock5 = ResidualBlock(50, 50)
-        self.fc1 = nn.Linear(50*self.width*self.height, self.num_distinct_actions + 1)
+        self.fc1 = nn.Linear(50*self.width*self.height, self.num_distinct_actions + 2)
         return
 
     def forward(self, x):
@@ -57,8 +57,9 @@ class Net(nn.Module):
 
         x = x.view(-1, self.height * self.width * 50)
         x = self.fc1(x)
-        xp, v = x.split(self.num_distinct_actions, 1)
-        return F.softmax(xp, dim=1), torch.tanh(v)
+        xp, v_error = x.split(self.num_distinct_actions, 1)
+        v, error = v_error.split(1, 1)
+        return F.softmax(xp, dim=1), torch.tanh(v), 4*torch.sigmoid(error)
 
     def predict(self, state):
         """
@@ -71,7 +72,7 @@ class Net(nn.Module):
         with torch.no_grad():
             tens = torch.from_numpy(board).float().to(self.device)
             tens = tens.unsqueeze(0)
-            p_t, v_t = self.forward(tens)
+            p_t, v_t, _ = self.forward(tens)
             ps = p_t.tolist()[0]
             v = float(v_t)
         return ps, v

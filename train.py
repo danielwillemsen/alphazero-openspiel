@@ -75,6 +75,8 @@ class Trainer:
         self.optimizer = torch.optim.Adam(self.current_net.parameters(), lr=self.lr, weight_decay=0.0001)
         self.criterion_policy = nn.BCELoss()
         self.criterion_value = nn.MSELoss()
+        self.criterion_error = nn.MSELoss()
+
         self.current_net.eval()
 
 
@@ -98,18 +100,21 @@ class Trainer:
         p_r = torch.tensor(np.array(p_r)).float().to(self.device)
         v_r = torch.tensor(np.array(v_r)).float().to(self.device)
 
+
         # Pass through network
-        p_t, v_t = self.current_net(x)
+        p_t, v_t, err_t = self.current_net(x)
+        err_r = (v_t-v_r.unsqueeze(1))*(v_t-v_r.unsqueeze(1))
 
         # Backward pass
         loss_v = self.criterion_value(v_t, v_r.unsqueeze(1))
         loss_p = -torch.sum(p_r * torch.log(p_t)) / p_r.size()[0]
+        loss_err = self.criterion_error(err_t, err_r)
 
         # loss_p = self.criterion_policy(p_t, p_r)
-        loss = loss_v + loss_p
+        loss = loss_v + loss_p + loss_err
         loss.backward()
         self.optimizer.step()
-        return loss_p, loss_v
+        return loss_p, loss_v, loss_err, torch.mean(err_r)
 
     def train_network(self, n_batches):
         """Trains the neural network for batches_per_generation batches
@@ -122,17 +127,21 @@ class Trainer:
         flattened_buffer = self.remove_duplicates(flattened_buffer)
         loss_tot_v = 0
         loss_tot_p = 0
-
+        loss_tot_err = 0
+        err_tot = 0
         for i in range(n_batches):
-            loss_p, loss_v = self.net_step(flattened_buffer)
+            loss_p, loss_v, loss_err, err = self.net_step(flattened_buffer)
             loss_tot_p += loss_p
-            v = loss_v
-            loss_tot_v += v
+            loss_tot_v += loss_v
+            loss_tot_err += loss_err
+            err_tot += err
             if i % 100 == 99:
                 logger.info("Batch: " + str(i) + "Loss policy: " + str(loss_tot_p / 100.) + "Loss value: " + str(
-                    loss_tot_v / 100.))
+                    loss_tot_v / 100.) + "Loss error: " + str(loss_tot_err / 100.) + "Error: " + str(err_tot / 100.))
                 loss_tot_v = 0
                 loss_tot_p = 0
+                loss_tot_err = 0
+                err_tot = 0
         self.current_net.eval()
 
     @staticmethod

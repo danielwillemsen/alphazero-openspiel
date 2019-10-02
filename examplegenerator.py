@@ -95,7 +95,7 @@ def handle_gpu(net, parent_conns, device):
                 batch.append(conn.recv())
         if batch:
             batch = torch.from_numpy(np.array(batch)).float().to(device)
-            p_t, v_t = net.forward(batch)
+            p_t, v_t, _ = net.forward(batch)
             p_t_list = p_t.tolist()
             v_t_list = v_t.tolist()
             for i in range(len(p_t_list)):
