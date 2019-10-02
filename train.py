@@ -30,11 +30,11 @@ class Trainer:
         self.use_gpu = True                     # Use GPU (if available)
 
         # Algorithm Parameters
-        self.n_games_per_generation = 500        # How many games to generate per iteration
-        self.n_batches_per_generation = 2000    # How batches of neural network training per iteration
+        self.n_games_per_generation = 500      # How many games to generate per iteration
+        self.n_batches_per_generation = 400     # How batches of neural network training per iteration
         self.n_games_buffer_max = 20000         # How many games to store in FIFO buffer, at most. Buffer is grown.
-        self.batch_size = 64                    # Batch size for neural network training
-        self.lr = 0.0002                        # Learning rate for neural network
+        self.batch_size = 256                   # Batch size for neural network training
+        self.lr = 0.001                         # Learning rate for neural network
         self.n_games_buffer = 4 * self.n_games_per_generation
         self.n_playouts_train = 100
 
