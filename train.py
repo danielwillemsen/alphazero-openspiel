@@ -33,13 +33,14 @@ class Trainer:
         self.n_games_per_generation = 500      # How many games to generate per iteration
         self.n_batches_per_generation = 500     # How batches of neural network training per iteration
         self.n_games_buffer_max = 20000         # How many games to store in FIFO buffer, at most. Buffer is grown.
-        self.batch_size = 256                   # Batch size for neural network training
+        self.batch_size = 256                 # Batch size for neural network training
         self.lr = 0.001                         # Learning rate for neural network
         self.n_games_buffer = 4 * self.n_games_per_generation
         self.n_playouts_train = 100
 
         # Initialization of the trainer
         self.generation = 0
+        self.test_keys = set()
         self.game = pyspiel.load_game(self.name_game)
         self.buffer = []
         self.num_distinct_actions = self.game.num_distinct_actions()
@@ -116,6 +117,40 @@ class Trainer:
         self.optimizer.step()
         return loss_p, loss_v, loss_err, torch.mean(err_r)
 
+    def net_step_test(self, flattened_buffer):
+        """Samples a random batch and updates the NN parameters with this bat
+
+        @return:
+        """
+        self.current_net.zero_grad()
+        self.current_net.eval()
+        with torch.no_grad():
+
+            # Select samples and format them to use as batch
+            sample_ids = np.random.randint(len(flattened_buffer), size=self.batch_size)
+            x = [flattened_buffer[i][1] for i in range(len(flattened_buffer))]
+            p_r = [flattened_buffer[i][2] for i in range(len(flattened_buffer))]
+            v_r = [flattened_buffer[i][3] for i in range(len(flattened_buffer))]
+
+            x = torch.from_numpy(np.array(x)).float().to(self.device)
+            p_r = torch.tensor(np.array(p_r)).float().to(self.device)
+            v_r = torch.tensor(np.array(v_r)).float().to(self.device)
+
+
+            # Pass through network
+            p_t, v_t, err_t = self.current_net(x)
+            err_r = (v_t-v_r.unsqueeze(1))*(v_t-v_r.unsqueeze(1))
+
+            # Backward pass
+            loss_v = self.criterion_value(v_t, v_r.unsqueeze(1))
+            loss_p = -torch.sum(p_r * torch.log(p_t)) / p_r.size()[0]
+            loss_err = self.criterion_error(err_t, err_r)
+
+            # loss_p = self.criterion_policy(p_t, p_r)
+            loss = loss_v + loss_p + loss_err
+        self.current_net.train()
+        return loss_p, loss_v, loss_err, torch.mean(err_r)
+
     def train_network(self, n_batches):
         """Trains the neural network for batches_per_generation batches
 
@@ -124,11 +159,15 @@ class Trainer:
         logger.info("Training Network")
         self.current_net.train()
         flattened_buffer = [sample for game in self.buffer for sample in game]
-        flattened_buffer = self.remove_duplicates(flattened_buffer)
+        flattened_buffer, test_buffer = self.remove_duplicates(flattened_buffer)
         loss_tot_v = 0
         loss_tot_p = 0
         loss_tot_err = 0
         err_tot = 0
+        loss_p, loss_v, loss_err, err = self.net_step_test(test_buffer)
+        logger.info("TEST::: " + "Loss policy: " + str(loss_p ) + "Loss value: " + str(
+            loss_v) + "Loss error: " + str(loss_err) + "Error: " + str(err))
+
         for i in range(n_batches):
             loss_p, loss_v, loss_err, err = self.net_step(flattened_buffer)
             loss_tot_p += loss_p
@@ -142,34 +181,63 @@ class Trainer:
                 loss_tot_p = 0
                 loss_tot_err = 0
                 err_tot = 0
+        loss_p, loss_v, loss_err, err = self.net_step_test(test_buffer)
+        logger.info("TEST::: " + "Loss policy: " + str(loss_p ) + "Loss value: " + str(
+            loss_v) + "Loss error: " + str(loss_err) + "Error: " + str(err))
+
         self.current_net.eval()
 
-    @staticmethod
-    def remove_duplicates(flattened_buffer):
+    def remove_duplicates(self, flattened_buffer):
         logger.info("Removing duplciates")
         logger.info("Initial amount of samples: " + str(len(flattened_buffer)))
         start = time.time()
         # Remove duplicates
         flattened_buffer_dict = dict()
         flattened_buffer_counts = dict()
+        test_buffer_counts = dict()
+        test_buffer_dict = dict()
         for item in flattened_buffer:
-            if item[0] in flattened_buffer_dict:
-                # Average policy
-                flattened_buffer_dict[item[0]][2] = [sum(x) for x in zip(flattened_buffer_dict[item[0]][2], item[2])]
-                # Average value
-                flattened_buffer_dict[item[0]][3] += item[3]
-                flattened_buffer_counts[item[0]] += 1
+            if item[0] not in self.test_keys:
+                if len(self.test_keys) < 5000:
+                    if np.random.rand() < 0.01:
+                        self.test_keys.add(item[0])
+            if item[0] in self.test_keys:
+                if item[0] in test_buffer_dict:
+                    # Average policy
+                    test_buffer_dict[item[0]][2] = [sum(x) for x in
+                                                    zip(test_buffer_dict[item[0]][2], item[2])]
+                    # Average value
+                    test_buffer_dict[item[0]][3] += item[3]
+                    test_buffer_counts[item[0]] += 1
+
+                else:
+                    test_buffer_dict[item[0]] = item
+                    test_buffer_counts[item[0]] = 1
 
             else:
-                flattened_buffer_dict[item[0]] = item
-                flattened_buffer_counts[item[0]] = 1
+                if item[0] in flattened_buffer_dict:
+                    # Average policy
+                    flattened_buffer_dict[item[0]][2] = [sum(x) for x in zip(flattened_buffer_dict[item[0]][2], item[2])]
+                    # Average value
+                    flattened_buffer_dict[item[0]][3] += item[3]
+                    flattened_buffer_counts[item[0]] += 1
+
+                else:
+                    flattened_buffer_dict[item[0]] = item
+                    flattened_buffer_counts[item[0]] = 1
         for key, value in flattened_buffer_dict.items():
             flattened_buffer_dict[key][2] = [x / flattened_buffer_counts[key] for x in flattened_buffer_dict[key][2]]
             flattened_buffer_dict[key][3] = flattened_buffer_dict[key][3] / flattened_buffer_counts[key]
+        for key, value in test_buffer_dict.items():
+            test_buffer_dict[key][2] = [x / test_buffer_counts[key] for x in test_buffer_dict[key][2]]
+            test_buffer_dict[key][3] = test_buffer_dict[key][3] / test_buffer_counts[key]
+
         flattened_buffer = list(flattened_buffer_dict.values())
+        test_buffer = list(test_buffer_dict.values())
+
         logger.info("New amount of samples: " + str(len(flattened_buffer)))
         logger.info("Duplication removal took:" + str(time.time() - start) + "seconds")
-        return flattened_buffer
+        return flattened_buffer, test_buffer
 
     def generate_examples(self, n_games):
         """Generates new games in a multithreaded way.
