@@ -208,7 +208,7 @@ class Trainer:
             loss_v) + "Loss error: " + str(loss_err) + "Loss error naive: " + str(loss_err_naive) + "Error: " + str(err))
 
         for i in range(100):
-            loss_p, loss_v, loss_err, err, loss_err_naive = self.net_step_test(flattened_buffer)
+            loss_p, loss_v, loss_err, err, loss_err_naive = self.net_step_test2(flattened_buffer)
             loss_tot_p += loss_p
             loss_tot_v += loss_v
             loss_tot_err += loss_err
