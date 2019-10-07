@@ -154,6 +154,41 @@ class Trainer:
         self.current_net.train()
         return loss_p, loss_v, loss_err, torch.mean(err_r), loss_naive
 
+    def net_step_test2(self, flattened_buffer):
+        """Samples a random batch and updates the NN parameters with this bat
+
+        @return:
+        """
+        self.current_net.zero_grad()
+        self.current_net.eval()
+        with torch.no_grad():
+
+            # Select samples and format them to use as batch
+            sample_ids = np.random.randint(len(flattened_buffer), size=self.batch_size)
+            x = [flattened_buffer[i][1] for i in sample_ids]
+            p_r = [flattened_buffer[i][2] for i in sample_ids]
+            v_r = [flattened_buffer[i][3] for i in sample_ids]
+
+            x = torch.from_numpy(np.array(x)).float().to(self.device)
+            p_r = torch.tensor(np.array(p_r)).float().to(self.device)
+            v_r = torch.tensor(np.array(v_r)).float().to(self.device)
+
+
+            # Pass through network
+            p_t, v_t, err_t = self.current_net(x)
+            err_r = (v_t-v_r.unsqueeze(1))*(v_t-v_r.unsqueeze(1))
+
+            # Backward pass
+            loss_v = self.criterion_value(v_t, v_r.unsqueeze(1))
+            loss_p = -torch.sum(p_r * torch.log(p_t)) / p_r.size()[0]
+            loss_err = self.criterion_error(err_t, err_r)
+            loss_naive = self.criterion_error((torch.zeros(err_r.size()) + self.MSE_error_avg).to(self.device), err_r)
+
+            # loss_p = self.criterion_policy(p_t, p_r)
+            loss = loss_v + loss_p + loss_err
+        self.current_net.train()
+        return loss_p, loss_v, loss_err, torch.mean(err_r), loss_naive
+
     def train_network(self, n_batches):
         """Trains the neural network for batches_per_generation batches
 
