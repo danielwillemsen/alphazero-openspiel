@@ -172,6 +172,27 @@ class Trainer:
         logger.info("TEST::: " + "Loss policy: " + str(loss_p ) + "Loss value: " + str(
             loss_v) + "Loss error: " + str(loss_err) + "Loss error naive: " + str(loss_err_naive) + "Error: " + str(err))
 
+        for i in range(100):
+            loss_p, loss_v, loss_err, err, loss_err_naive = self.net_step_test(flattened_buffer)
+            loss_tot_p += loss_p
+            loss_tot_v += loss_v
+            loss_tot_err += loss_err
+            err_tot += err
+            loss_tot_err_naive += loss_err_naive
+            if i % 100 == 99:
+                logger.info("TEST_IN_SAMPLE: " + str(i) + "Loss policy: " + str(loss_tot_p / 100.) + "Loss value: " + str(
+                    loss_tot_v / 100.) + "Loss error: " + str(loss_tot_err / 100.) + "Loss error naive: " + str(loss_tot_err_naive / 100.) + "Error: " + str(err_tot / 100.))
+                loss_tot_v = 0
+                loss_tot_p = 0
+                loss_tot_err = 0
+                err_tot = 0
+                loss_tot_err_naive = 0
+
+        loss_tot_v = 0
+        loss_tot_p = 0
+        loss_tot_err = 0
+        err_tot = 0
+        loss_tot_err_naive = 0
         for i in range(n_batches):
             loss_p, loss_v, loss_err, err, loss_err_naive = self.net_step(flattened_buffer)
             loss_tot_p += loss_p
