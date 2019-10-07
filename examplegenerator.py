@@ -48,6 +48,16 @@ def test_net_game_vs_mcts200(tup):
     score1, score2 = test_net_vs_mcts(evaluator.evaluate_nn, 200, game_name, **kwargs)
     return score1 + score2
 
+def test_net_game_vs_mcts1000(tup):
+    conn = tup[0]
+    game_name = tup[1]
+    kwargs = tup[2]
+    game = pyspiel.load_game(game_name)
+    niceness=os.nice(0)
+    os.nice(5-niceness)
+    evaluator = Evaluator(conn, game)
+    score1, score2 = test_net_vs_mcts(evaluator.evaluate_nn, 1000, game_name, **kwargs)
+    return score1 + score2
 
 def test_zero_game_vs_mcts200(tup):
     conn = tup[0]
@@ -60,6 +70,16 @@ def test_zero_game_vs_mcts200(tup):
     score1, score2 = test_zero_vs_mcts(evaluator.evaluate_nn, 200, game_name, **kwargs)
     return score1 + score2
 
+def test_zero_game_vs_mcts1000(tup):
+    conn = tup[0]
+    game_name = tup[1]
+    kwargs = tup[2]
+    game = pyspiel.load_game(game_name)
+    niceness = os.nice(0)
+    os.nice(5-niceness)
+    evaluator = Evaluator(conn, game)
+    score1, score2 = test_zero_vs_mcts(evaluator.evaluate_nn, 1000, game_name, **kwargs)
+    return score1 + score2
 
 class Evaluator():
     def __init__(self, conn, game):

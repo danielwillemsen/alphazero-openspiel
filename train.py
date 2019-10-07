@@ -12,7 +12,7 @@ from open_spiel.python.algorithms import mcts
 from alphazerobot import AlphaZeroBot, NeuralNetBot
 from connect4net import Net
 from examplegenerator import ExampleGenerator
-from examplegenerator import test_net_game_vs_mcts100, test_net_game_vs_mcts200, test_zero_game_vs_mcts200
+from examplegenerator import test_net_game_vs_mcts100, test_net_game_vs_mcts200, test_zero_game_vs_mcts200, test_zero_game_vs_mcts1000, test_net_game_vs_mcts1000
 from game_utils import *
 import logging
 
@@ -20,7 +20,7 @@ import logging
 class Trainer:
     def __init__(self):
         # Experiment Parameters
-        self.name_game = "connect_four"         # Name of game (should be from open_spiel library)
+        self.name_game = "breakthrough(rows=6,columns=6)"  # Name of game (should be from open_spiel library)
         self.name_run = "openspieltest"         # Name of run
         self.model_path = "models/"             # Path to save the models
         self.save = True                        # Save neural network
@@ -48,8 +48,8 @@ class Trainer:
         self.game = pyspiel.load_game(self.name_game)
         self.games_played = 0
         self.start_time = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-        self.test_data = {'games_played': [], 'zero_vs_random': [], 'zero_vs_mcts100': [], 'zero_vs_mcts200': [],
-                          'net_vs_random': [], 'net_vs_mcts100': [], 'net_vs_mcts200': []}
+        self.test_data = {'games_played': [], 'zero_vs_random': [], 'zero_vs_mcts100': [], 'zero_vs_mcts200': [], 'zero_vs_mcts1000': [],
+                          'net_vs_random': [], 'net_vs_mcts100': [], 'net_vs_mcts200': [], 'net_vs_mcts1000': []}
         # Initialize logger
         formatter = logging.Formatter('%(asctime)s %(message)s')
         logger.setLevel('DEBUG')
@@ -80,7 +80,7 @@ class Trainer:
 
         self.current_net.eval()
 
-
+        self.MSE_error_avg = 0.0
         logger.info(self.__dict__)
         logger.info("Using:" + str(self.device))
 
@@ -110,12 +110,14 @@ class Trainer:
         loss_v = self.criterion_value(v_t, v_r.unsqueeze(1))
         loss_p = -torch.sum(p_r * torch.log(p_t)) / p_r.size()[0]
         loss_err = self.criterion_error(err_t, err_r)
-
+        loss_naive = self.criterion_error((torch.zeros(err_r.size()) + self.MSE_error_avg).to(self.device), err_r)
         # loss_p = self.criterion_policy(p_t, p_r)
         loss = loss_v + loss_p + loss_err
         loss.backward()
         self.optimizer.step()
-        return loss_p, loss_v, loss_err, torch.mean(err_r)
+        alpha = 0.001
+        self.MSE_error_avg = (1-alpha) * self.MSE_error_avg + (alpha*loss_v)
+        return loss_p, loss_v, loss_err, torch.mean(err_r), loss_naive
 
     def net_step_test(self, flattened_buffer):
         """Samples a random batch and updates the NN parameters with this bat
@@ -145,11 +147,12 @@ class Trainer:
             loss_v = self.criterion_value(v_t, v_r.unsqueeze(1))
             loss_p = -torch.sum(p_r * torch.log(p_t)) / p_r.size()[0]
             loss_err = self.criterion_error(err_t, err_r)
+            loss_naive = self.criterion_error((torch.zeros(err_r.size()) + self.MSE_error_avg).to(self.device), err_r)
 
             # loss_p = self.criterion_policy(p_t, p_r)
             loss = loss_v + loss_p + loss_err
         self.current_net.train()
-        return loss_p, loss_v, loss_err, torch.mean(err_r)
+        return loss_p, loss_v, loss_err, torch.mean(err_r), loss_naive
 
     def train_network(self, n_batches):
         """Trains the neural network for batches_per_generation batches
@@ -164,26 +167,29 @@ class Trainer:
         loss_tot_p = 0
         loss_tot_err = 0
         err_tot = 0
-        loss_p, loss_v, loss_err, err = self.net_step_test(test_buffer)
+        loss_tot_err_naive = 0
+        loss_p, loss_v, loss_err, err, loss_err_naive = self.net_step_test(test_buffer)
         logger.info("TEST::: " + "Loss policy: " + str(loss_p ) + "Loss value: " + str(
-            loss_v) + "Loss error: " + str(loss_err) + "Error: " + str(err))
+            loss_v) + "Loss error: " + str(loss_err) + "Loss error naive: " + str(loss_err_naive) + "Error: " + str(err))
 
         for i in range(n_batches):
-            loss_p, loss_v, loss_err, err = self.net_step(flattened_buffer)
+            loss_p, loss_v, loss_err, err, loss_err_naive = self.net_step(flattened_buffer)
             loss_tot_p += loss_p
             loss_tot_v += loss_v
             loss_tot_err += loss_err
             err_tot += err
+            loss_tot_err_naive += loss_err_naive
             if i % 100 == 99:
                 logger.info("Batch: " + str(i) + "Loss policy: " + str(loss_tot_p / 100.) + "Loss value: " + str(
-                    loss_tot_v / 100.) + "Loss error: " + str(loss_tot_err / 100.) + "Error: " + str(err_tot / 100.))
+                    loss_tot_v / 100.) + "Loss error: " + str(loss_tot_err / 100.) + "Loss error naive: " + str(loss_tot_err_naive / 100.) + "Error: " + str(err_tot / 100.))
                 loss_tot_v = 0
                 loss_tot_p = 0
                 loss_tot_err = 0
                 err_tot = 0
-        loss_p, loss_v, loss_err, err = self.net_step_test(test_buffer)
+                loss_tot_err_naive = 0
+        loss_p, loss_v, loss_err, err, loss_err_naive = self.net_step_test(test_buffer)
         logger.info("TEST::: " + "Loss policy: " + str(loss_p ) + "Loss value: " + str(
-            loss_v) + "Loss error: " + str(loss_err) + "Error: " + str(err))
+            loss_v) + "Loss error: " + str(loss_err) + "Loss error naive: " + str(loss_err_naive) + "Error: " + str(err))
 
         self.current_net.eval()
 
@@ -321,6 +327,15 @@ class Trainer:
         avg = generator.generate_mcts_tests(self.n_tests, test_net_game_vs_mcts200)
         self.test_data['net_vs_mcts200'].append(avg)
         logger.info("Average score vs mcts200 (net only):" + str(avg))
+
+        avg = generator.generate_mcts_tests(self.n_tests, test_zero_game_vs_mcts1000)
+        self.test_data['zero_vs_mcts1000'].append(avg)
+        logger.info("Average score vs mcts1000:" + str(avg))
+
+        avg = generator.generate_mcts_tests(self.n_tests, test_net_game_vs_mcts1000)
+        self.test_data['net_vs_mcts1000'].append(avg)
+        logger.info("Average score vs mcts1000 (net only):" + str(avg))
+
         with open("logs/" + self.start_time + str(self.name_run) + ".p", 'wb') as f:
             pickle.dump(self.test_data, f)
         logger.info("Testing took: " + str(time.time() - start) + "seconds")
