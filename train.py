@@ -12,7 +12,6 @@ from open_spiel.python.algorithms import mcts
 from alphazerobot import AlphaZeroBot, NeuralNetBot
 from connect4net import Net
 from examplegenerator import ExampleGenerator
-from examplegenerator import test_net_game_vs_mcts100, test_net_game_vs_mcts200, test_zero_game_vs_mcts200
 from game_utils import *
 import logging
 
@@ -26,7 +25,7 @@ class Trainer:
         self.save = True                        # Save neural network
         self.save_n_gens = 10                   # How many iterations until network save
         self.test_n_gens = 10                    # How many iterations until testing
-        self.n_tests = 200                      # How many tests to perform for testing
+        self.n_tests = 200                     # How many tests to perform for testing
         self.use_gpu = True                     # Use GPU (if available)
 
         # Algorithm Parameters
@@ -206,7 +205,7 @@ class Trainer:
         start = time.time()
         logger.info("Testing...")
         generator = ExampleGenerator(self.current_net, self.name_game,
-                                     self.device)
+                                     self.device, is_test=True)
         self.test_data['games_played'].append(self.games_played)
         # score_tot = 0.
         # for i in range(self.n_tests):
@@ -233,15 +232,15 @@ class Trainer:
         # self.test_data['zero_vs_mcts100'].append(avg)
         # logger.info("Average score vs mcts100:" + str(avg))
 
-        avg = generator.generate_mcts_tests(self.n_tests, test_net_game_vs_mcts100)
+        avg = generator.generate_tests(self.n_tests, test_net_vs_mcts, 100)
         self.test_data['net_vs_mcts100'].append(avg)
         logger.info("Average score vs mcts100 (net only):" + str(avg))
 
-        avg = generator.generate_mcts_tests(self.n_tests, test_zero_game_vs_mcts200)
+        avg = generator.generate_tests(self.n_tests, test_zero_vs_mcts, 200)
         self.test_data['zero_vs_mcts200'].append(avg)
         logger.info("Average score vs mcts200:" + str(avg))
 
-        avg = generator.generate_mcts_tests(self.n_tests, test_net_game_vs_mcts200)
+        avg = generator.generate_tests(self.n_tests, test_net_vs_mcts, 200)
         self.test_data['net_vs_mcts200'].append(avg)
         logger.info("Average score vs mcts200 (net only):" + str(avg))
         with open("logs/" + self.start_time + str(self.name_run) + ".p", 'wb') as f:

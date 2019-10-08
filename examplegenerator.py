@@ -13,51 +13,25 @@ import copy
 import logging
 logger = logging.getLogger('alphazero')
 
+
 def generate_single_game(tup):
-    conn = tup[0]
-    game_name = tup[1]
-    kwargs = tup[2]
+    conn, game_name, kwargs, _, _ = tup
     game = pyspiel.load_game(game_name)
-    niceness=os.nice(0)
+    niceness = os.nice(0)
     os.nice(5-niceness)
     evaluator = Evaluator(conn, game)
     example = play_game_self(evaluator.evaluate_nn, game_name, **kwargs)
     return example
 
 
-def test_net_game_vs_mcts100(tup):
-    conn = tup[0]
-    game_name = tup[1]
-    kwargs = tup[2]
-    game = pyspiel.load_game(game_name)
-    niceness=os.nice(0)
-    os.nice(5-niceness)
-    evaluator = Evaluator(conn, game)
-    score1, score2 = test_net_vs_mcts(evaluator.evaluate_nn, 100, game_name, **kwargs)
-    return score1 + score2
-
-
-def test_net_game_vs_mcts200(tup):
-    conn = tup[0]
-    game_name = tup[1]
-    kwargs = tup[2]
-    game = pyspiel.load_game(game_name)
-    niceness=os.nice(0)
-    os.nice(5-niceness)
-    evaluator = Evaluator(conn, game)
-    score1, score2 = test_net_vs_mcts(evaluator.evaluate_nn, 200, game_name, **kwargs)
-    return score1 + score2
-
-
-def test_zero_game_vs_mcts200(tup):
-    conn = tup[0]
-    game_name = tup[1]
-    kwargs = tup[2]
+def test_single_game(tup):
+    conn, game_name, kwargs, game_fn, _ = tup
+    n_playouts_mcts = tup[4][0]
     game = pyspiel.load_game(game_name)
     niceness = os.nice(0)
     os.nice(5-niceness)
     evaluator = Evaluator(conn, game)
-    score1, score2 = test_zero_vs_mcts(evaluator.evaluate_nn, 200, game_name, **kwargs)
+    score1, score2 = game_fn(evaluator.evaluate_nn, n_playouts_mcts, game_name, **kwargs)
     return score1 + score2
 
 
@@ -104,6 +78,7 @@ def handle_gpu(net, parent_conns, device):
 
 class ExampleGenerator:
     def __init__(self, net, game_name, device, **kwargs):
+        self.is_test = bool(kwargs.get("is_test", False))
         self.device_count = torch.cuda.device_count()
         self.net = copy.deepcopy(net)
         self.net.to("cpu")
@@ -114,9 +89,14 @@ class ExampleGenerator:
         self.gpu_queue = dict()
         self.ps = dict()
         self.v = dict()
+
+        if self.is_test:
+            self.single_game_fn = test_single_game
+        else:
+            self.single_game_fn = generate_single_game
         return
 
-    def start_pool(self, n_games, game_fn, device):
+    def start_pool(self, n_games, game_fn, device, *args):
         parent_conns = []
         child_conns = []
         for i in range(n_games):
@@ -126,10 +106,10 @@ class ExampleGenerator:
         pool = multiprocessing.Pool(processes=50, initializer=np.random.seed)
         gpu_handler = multiprocessing.Process(target=handle_gpu, args=(copy.deepcopy(self.net), parent_conns, device))
         gpu_handler.start()
-        examples = pool.map_async(game_fn, [(conn, self.game_name, self.kwargs) for conn in child_conns])
+        examples = pool.map_async(self.single_game_fn, [(conn, self.game_name, self.kwargs, game_fn, args) for conn in child_conns])
         return [gpu_handler, pool, examples, child_conns, parent_conns]
 
-    def run_games(self, n_games, game_fn):
+    def run_games(self, n_games, game_fn, *args):
         n_pools = 4
         pools = []
         examples = []
@@ -138,7 +118,7 @@ class ExampleGenerator:
             if device_no>=self.device_count:
                 device_no = 0
             device = torch.device("cuda:" + str(device_no) if self.device_count >= 1 else "cpu")
-            pools.append(self.start_pool(int(n_games / n_pools), game_fn, device))
+            pools.append(self.start_pool(int(n_games / n_pools), game_fn, device, *args))
             device_no += 1
         for i in range(n_pools):
             examples.append(pools[i][2].get())
@@ -158,19 +138,22 @@ class ExampleGenerator:
         @return:
         """
 
-        examples_temp = self.run_games(n_games, generate_single_game)
+        examples_temp = self.run_games(n_games, play_game_self)
         examples = [item for sublist in examples_temp for item in sublist]
         logger.info("Generated " + str(len(examples)) + " games")
         return examples
 
-    def generate_mcts_tests(self, n_games, game_fn):
-        """Creates threads with MCTSAgents who play one game each. They send neural network evaluation requests to the
+    def generate_tests(self, n_games, game_fn, n_playouts_mcts):
+        """Creates threads with alphaZero agents or NeuralNet agens who play one game against an MCTS bot each. 
+        They send neural network evaluation requests to the
         GPU_handler thread.
 
         @param n_games: amount of games to generate. Also is the amount of threads created
+        @param game_fn: which game function to use
+        @param n_playouts_mcts: amount of playouts for the MCTS agent
         @return:
         """
-        examples_temp = self.run_games(n_games, game_fn)
+        examples_temp = self.run_games(n_games, game_fn, n_playouts_mcts)
         examples = [item for sublist in examples_temp for item in sublist]
         avg_reward = sum(examples)/(2*n_games)
         return avg_reward
