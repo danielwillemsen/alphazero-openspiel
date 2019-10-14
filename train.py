@@ -15,11 +15,13 @@ from examplegenerator import ExampleGenerator
 from game_utils import *
 import logging
 
+logger = logging.getLogger('alphazero')
+
 
 class Trainer:
     def __init__(self):
         # Experiment Parameters
-        self.name_game = "connect_four"         # Name of game (should be from open_spiel library)
+        self.name_game = "breakthrough(rows=6,columns=6)"         # Name of game (should be from open_spiel library)
         self.name_run = "openspieltest"         # Name of run
         self.model_path = "models/"             # Path to save the models
         self.save = True                        # Save neural network
