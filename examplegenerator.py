@@ -15,7 +15,7 @@ logger = logging.getLogger('alphazero')
 
 
 def generate_single_game(tup):
-    conn, game_name, kwargs, _, _ = tup
+    conn, game_name, kwargs, _, _, _ = tup
     game = pyspiel.load_game(game_name)
     niceness = os.nice(0)
     os.nice(5-niceness)
@@ -25,13 +25,18 @@ def generate_single_game(tup):
 
 
 def test_single_game(tup):
-    conn, game_name, kwargs, game_fn, _ = tup
-    n_playouts_mcts = tup[4][0]
+    conn, game_name, kwargs, game_fn, conn2, _ = tup
+    n_playouts_mcts = tup[5][0]
     game = pyspiel.load_game(game_name)
     niceness = os.nice(0)
     os.nice(5-niceness)
     evaluator = Evaluator(conn, game)
-    score1, score2 = game_fn(evaluator.evaluate_nn, n_playouts_mcts, game_name, **kwargs)
+    if conn2:
+        evaluator2 = Evaluator(conn2, game)
+        score1, score2 = game_fn(evaluator.evaluate_nn, n_playouts_mcts, game_name, policy_fn2=evaluator2.evaluate_nn, **kwargs)
+    else:
+        score1, score2 = game_fn(evaluator.evaluate_nn, n_playouts_mcts, game_name, **kwargs)
+
     return score1 + score2
 
 
@@ -82,6 +87,10 @@ class ExampleGenerator:
         self.device_count = torch.cuda.device_count()
         self.net = copy.deepcopy(net)
         self.net.to("cpu")
+        self.net2 = copy.deepcopy(kwargs.get('net2', None))
+        if self.net2:
+            self.net2.to("cpu")
+
         self.device = device
         self.game_name = game_name
         self.kwargs = kwargs
@@ -99,15 +108,36 @@ class ExampleGenerator:
     def start_pool(self, n_games, game_fn, device, *args):
         parent_conns = []
         child_conns = []
+        parent_conns2 = []
+        child_conns2 = []
         for i in range(n_games):
             parent_conn, child_conn = multiprocessing.Pipe()
             parent_conns.append(parent_conn)
             child_conns.append(child_conn)
+        if self.net2:
+            for i in range(n_games):
+                parent_conn2, child_conn2 = multiprocessing.Pipe()
+                parent_conns2.append(parent_conn2)
+                child_conns2.append(child_conn2)
         pool = multiprocessing.Pool(processes=50, initializer=np.random.seed)
         gpu_handler = multiprocessing.Process(target=handle_gpu, args=(copy.deepcopy(self.net), parent_conns, device))
+        gpu_handler2 = None
+        if self.net2:
+            gpu_handler2 = multiprocessing.Process(target=handle_gpu,
+                                                  args=(copy.deepcopy(self.net2), parent_conns2, device))
+            gpu_handler2.start()
+
         gpu_handler.start()
-        examples = pool.map_async(self.single_game_fn, [(conn, self.game_name, self.kwargs, game_fn, args) for conn in child_conns])
-        return [gpu_handler, pool, examples, child_conns, parent_conns]
+        if self.net2:
+            examples = pool.map_async(self.single_game_fn,
+                                      [(conn, self.game_name, self.kwargs, game_fn, child_conns2[idx], args)
+                                       for idx, conn in enumerate(child_conns)])
+        else:
+            examples = pool.map_async(self.single_game_fn,
+                                      [(conn, self.game_name, self.kwargs, game_fn, None, args)
+                                       for conn in child_conns])
+
+        return [gpu_handler, pool, examples, child_conns, parent_conns, gpu_handler2, child_conns2, parent_conns2]
 
     def run_games(self, n_games, game_fn, *args):
         n_pools = 4
@@ -126,6 +156,9 @@ class ExampleGenerator:
             pools[i][1].join()
             pools[i][0].terminate()
             pools[i][0].join()
+            if self.net2:
+                pools[i][5].terminate()
+                pools[i][5].join()
         niceness = os.nice(0)
         os.nice(0 - niceness)
         return examples

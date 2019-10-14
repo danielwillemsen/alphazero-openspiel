@@ -83,24 +83,26 @@ def test_net_vs_random(policy_fn, game_name, **kwargs):
     return score1, score2
 
 
-def test_zero_vs_zero(policy_fn, max_search_nodes, game_name, **kwargs):
+def test_zero_vs_zero(policy_fn, max_search_nodes, game_name, policy_fn2=None, **kwargs):
     examples = []
     settings1 = dict(kwargs.get("settings1", None))
     settings2 = dict(kwargs.get("settings2", None))
-
+    if not policy_fn2:
+        policy_fn2 = policy_fn
     game = pyspiel.load_game(game_name)
 
     # Alphazero first
     zero1_bot = AlphaZeroBot(game, 0, policy_fn=policy_fn, use_dirichlet=True, **settings1)
-    zero2_bot = AlphaZeroBot(game, 1, policy_fn=policy_fn, use_dirichlet=True, **settings2)
+    zero2_bot = AlphaZeroBot(game, 1, policy_fn=policy_fn2, use_dirichlet=True, **settings2)
 
     score1 = play_game(game, zero1_bot, zero2_bot)
 
     # Random bot first
     zero1_bot = AlphaZeroBot(game, 1, policy_fn=policy_fn, use_dirichlet=True, **settings1)
-    zero2_bot = AlphaZeroBot(game, 0, policy_fn=policy_fn, use_dirichlet=True, **settings2)
+    zero2_bot = AlphaZeroBot(game, 0, policy_fn=policy_fn2, use_dirichlet=True, **settings2)
     score2 = -play_game(game, zero2_bot, zero1_bot)
     return score1, score2
+
 
 def play_game_self(policy_fn, game_name, **kwargs):
     examples = []
