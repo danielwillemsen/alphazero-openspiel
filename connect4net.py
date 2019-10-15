@@ -10,11 +10,11 @@ def state_to_board(state, state_shape):
     """Converts the openspiel state representation of a board to a representation suitable for the neural network.
 
     :param state: openspiel state representation of the board
-    :return: neural network suitable representation of the board
+    :return: neural network suitable representation of the board. Last layer indicates the current player.
     """
-    board = np.asarray(state.information_state_as_normalized_vector()).reshape(state_shape)
-    if state.current_player() == 0:
-        board[[2, 1]] = board[[1, 2]]
+    board = np.zeros((state_shape[0]+1, state_shape[1], state_shape[2])) + state.current_player()
+    board[:-1] = np.asarray(state.information_state_as_normalized_vector()).reshape(state_shape)
+    board[-1] = np.zeros((1, state_shape[1], state_shape[2])) + state.current_player()
     return board
 
 
@@ -27,7 +27,7 @@ class Net(nn.Module):
     def __init__(self, state_shape, num_distinct_actions, **kwargs):
         super(Net, self).__init__()
         self.state_shape = state_shape
-        self.num_states = state_shape[0]
+        self.num_filters_input = state_shape[0] + 1
         self.height = state_shape[1]
         self.width = state_shape[2]
         self.num_distinct_actions = num_distinct_actions
@@ -35,7 +35,7 @@ class Net(nn.Module):
         self.device = kwargs.get('device', torch.device('cpu'))
         self.time1 = time.time()
 
-        self.resblock1 = ResidualBlock(self.num_states, 50)
+        self.resblock1 = ResidualBlock(self.num_filters_input, 50)
         self.resblock2 = ResidualBlock(50, 50)
         self.resblock3 = ResidualBlock(50, 50)
         self.resblock4 = ResidualBlock(50, 50)
@@ -94,7 +94,7 @@ class NetOld(nn.Module):
         self.device = kwargs.get('device', torch.device('cpu'))
         self.time1 = time.time()
 
-        self.conv1 = nn.Conv2d(self.num_states, 50, 3, padding=1)
+        self.conv1 = nn.Conv2d(self.num_states + 1, 50, 3, padding=1)
         self.bn1 = nn.BatchNorm2d(50)
         self.conv2 = nn.Conv2d(50, 50, 3, padding=1)
         self.bn2 = nn.BatchNorm2d(50)
