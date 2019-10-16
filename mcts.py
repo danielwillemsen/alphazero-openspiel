@@ -128,9 +128,12 @@ class MCTS:
 
     def expand_root_dirichlet(self, state):
         prior_ps, leaf_value = self.policy_fn(state)
+        legal_actions = state.legal_actions(state.current_player())
         if self.use_dirichlet:
-            prior_ps = (0.8 * np.array(prior_ps) + 0.2 * np.random.dirichlet(0.3 * np.ones(len(prior_ps)))).tolist()
-        self.root.expand(prior_ps, state.legal_actions(state.current_player()))
+            prior_ps = (0.75 * np.array(prior_ps))
+            dirichlet = list(np.random.dirichlet(0.3 * np.ones(len(legal_actions))))
+            prior_ps = [prior_ps[i] + 0.25*dirichlet[legal_actions.index(i)] if i in legal_actions else 0.0 for i in range(len(prior_ps))]
+        self.root.expand(prior_ps, legal_actions)
 
     def update_root(self, action):
         """Updates root when new move has been performed.
