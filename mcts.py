@@ -44,7 +44,10 @@ class Node:
         @return:
         """
         for action in legal_actions:
-            self.children[action] = Node(self, prior_ps[action], use_puct=self.use_puct)
+            if action not in self.children:
+                self.children[action] = Node(self, prior_ps[action], use_puct=self.use_puct)
+            else:
+                self.children[action].P = prior_ps[action]
 
     def get_value(self, c_puct):
         """Calculates the value of the node
@@ -118,7 +121,7 @@ class MCTS:
 
     def search(self, state):
         # Expand the root with dirichlet noise if this is the first move of the game
-        if self.use_dirichlet and not state.history():
+        if self.use_dirichlet:
             self.expand_root_dirichlet(state)
 
         for i in range(self.n_playouts):
@@ -132,7 +135,8 @@ class MCTS:
         if self.use_dirichlet:
             prior_ps = (0.75 * np.array(prior_ps))
             dirichlet = list(np.random.dirichlet(0.3 * np.ones(len(legal_actions))))
-            prior_ps = [prior_ps[i] + 0.25*dirichlet[legal_actions.index(i)] if i in legal_actions else 0.0 for i in range(len(prior_ps))]
+            for i, action in enumerate(legal_actions):
+                prior_ps[action] = prior_ps[action] + 0.25*dirichlet[i]
         self.root.expand(prior_ps, legal_actions)
 
     def update_root(self, action):
