@@ -2,13 +2,17 @@ import numpy as np
 import pyspiel
 from open_spiel.python.algorithms import mcts
 from connect4net import state_to_board
-
+import copy
 from alphazerobot import AlphaZeroBot, NeuralNetBot
 from connect4net import Net
 
 
-def play_game(game, player1, player2):
+def play_game(game, player1, player2, generate_statistics=False):
     # Returns the reward of the first player
+    statistics = dict()
+    statistics["player1"] = []
+    statistics["player2"] = []
+
     state = game.new_initial_state()
     while not state.is_terminal():
         if len(state.history()) % 2 == 0:
@@ -16,7 +20,13 @@ def play_game(game, player1, player2):
         else:
             _, action = player2.step(state)
         state.apply_action(action)
-    return state.returns()[0]
+        if generate_statistics:
+            statistics["player1"].append({"root": copy.deepcopy(player1.mcts.root)})
+            statistics["player2"].append({"root": copy.deepcopy(player2.mcts.root)})
+    if generate_statistics:
+        return state.returns()[0], statistics
+    else:
+        return state.returns()[0]
 
 
 def test_zero_vs_random(policy_fn):
@@ -83,10 +93,11 @@ def test_net_vs_random(policy_fn, game_name, **kwargs):
     return score1, score2
 
 
-def test_zero_vs_zero(policy_fn, max_search_nodes, game_name, policy_fn2=None, **kwargs):
-    examples = []
+def test_zero_vs_zero(policy_fn, max_search_nodes, game_name, policy_fn2=None, generate_statistics=False, **kwargs):
     settings1 = dict(kwargs.get("settings1", None))
     settings2 = dict(kwargs.get("settings2", None))
+    statistics = {}
+
     if not policy_fn2:
         policy_fn2 = policy_fn
     game = pyspiel.load_game(game_name)
@@ -95,13 +106,24 @@ def test_zero_vs_zero(policy_fn, max_search_nodes, game_name, policy_fn2=None, *
     zero1_bot = AlphaZeroBot(game, 0, policy_fn=policy_fn, use_dirichlet=True, **settings1)
     zero2_bot = AlphaZeroBot(game, 1, policy_fn=policy_fn2, use_dirichlet=True, **settings2)
 
-    score1 = play_game(game, zero1_bot, zero2_bot)
+    if generate_statistics:
+        score1, statistics_game1 = play_game(game, zero1_bot, zero2_bot, generate_statistics=generate_statistics)
+        statistics["game1"] = statistics_game1
+    else:
+        score1 = play_game(game, zero1_bot, zero2_bot, generate_statistics=generate_statistics)
 
     # Random bot first
     zero1_bot = AlphaZeroBot(game, 1, policy_fn=policy_fn, use_dirichlet=True, **settings1)
     zero2_bot = AlphaZeroBot(game, 0, policy_fn=policy_fn2, use_dirichlet=True, **settings2)
-    score2 = -play_game(game, zero2_bot, zero1_bot)
-    return score1, score2
+    if generate_statistics:
+        score2, statistics_game2 = play_game(game, zero2_bot, zero1_bot, generate_statistics=generate_statistics)
+        statistics_game2["player1"], statistics_game2["player2"] = statistics_game2["player2"], statistics_game2["player1"]
+        statistics["game2"] = statistics_game2
+        score2 *= -1
+    else:
+        score2 = -play_game(game, zero2_bot, zero1_bot, generate_statistics=generate_statistics)
+
+    return score1, score2, statistics
 
 
 def play_game_self(policy_fn, game_name, **kwargs):

@@ -31,13 +31,14 @@ def test_single_game(tup):
     niceness = os.nice(0)
     os.nice(5-niceness)
     evaluator = Evaluator(conn, game)
+    generate_statistics = bool(kwargs.get("generate_statistics", False))
     if conn2:
         evaluator2 = Evaluator(conn2, game)
-        score1, score2 = game_fn(evaluator.evaluate_nn, n_playouts_mcts, game_name, policy_fn2=evaluator2.evaluate_nn, **kwargs)
+        score1, score2, statistics = game_fn(evaluator.evaluate_nn, n_playouts_mcts, game_name, policy_fn2=evaluator2.evaluate_nn, **kwargs)
     else:
-        score1, score2 = game_fn(evaluator.evaluate_nn, n_playouts_mcts, game_name, **kwargs)
+        score1, score2, statistics = game_fn(evaluator.evaluate_nn, n_playouts_mcts, game_name, **kwargs)
 
-    return score1 + score2
+    return score1 + score2, statistics
 
 
 class Evaluator():
@@ -90,7 +91,7 @@ class ExampleGenerator:
         self.net2 = copy.deepcopy(kwargs.get('net2', None))
         if self.net2:
             self.net2.to("cpu")
-
+        self.generate_statistics = kwargs.get("generate_statistics", False)
         self.device = device
         self.game_name = game_name
         self.kwargs = kwargs
@@ -187,9 +188,14 @@ class ExampleGenerator:
         @return:
         """
         examples_temp = self.run_games(n_games, game_fn, n_playouts_mcts)
-        examples = [item for sublist in examples_temp for item in sublist]
+        examples = [item[0] for sublist in examples_temp for item in sublist]
+        statistics = [item[1] for sublist in examples_temp for item in sublist]
+
         avg_reward = sum(examples)/(2*n_games)
-        return avg_reward
+        if self.generate_statistics:
+            return avg_reward, statistics
+        else:
+            return avg_reward
 
 
 if __name__ == '__main__':
