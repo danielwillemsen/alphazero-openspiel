@@ -41,7 +41,7 @@ def test_zero_vs_random(policy_fn):
     zero_bot = AlphaZeroBot(game, 1, policy_fn=policy_fn, use_dirichlet=False)
     random_bot = pyspiel.make_uniform_random_bot(game, 0, np.random.randint(0, 1000))
     score2 = -play_game(game, random_bot, zero_bot)
-    return score1, score2
+    return score1, score2, None
 
 
 def test_zero_vs_mcts(policy_fn, max_search_nodes, game_name, **kwargs):
@@ -58,7 +58,7 @@ def test_zero_vs_mcts(policy_fn, max_search_nodes, game_name, **kwargs):
     mcts_bot = mcts.MCTSBot(game, 0, 1,
                             max_search_nodes, mcts.RandomRolloutEvaluator(1))
     score2 = -play_game(game, mcts_bot, zero_bot)
-    return score1, score2
+    return score1, score2, None
 
 
 def test_net_vs_mcts(policy_fn, max_search_nodes, game_name, **kwargs):
@@ -75,7 +75,7 @@ def test_net_vs_mcts(policy_fn, max_search_nodes, game_name, **kwargs):
     mcts_bot = mcts.MCTSBot(game, 0, 1,
                             max_search_nodes, mcts.RandomRolloutEvaluator(1))
     score2 = -play_game(game, mcts_bot, zero_bot)
-    return score1, score2
+    return score1, score2, None
 
 
 def test_net_vs_random(policy_fn, game_name, **kwargs):
