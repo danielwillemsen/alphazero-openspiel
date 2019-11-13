@@ -140,7 +140,9 @@ def play_game_self(policy_fn, game_name, **kwargs):
         for i in range(num_distinct_actions):
             # Create a policy list. To be used in the net instead of a list of tuples.
             policy_list.append(policy_dict.get(i, 0.0))
-        examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, None])
+        # examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, None])
+        value = max([child.Q if child.N > 0 else -99.0 for child in alphazero_bot.mcts.root.children.values()])
+        examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, value])
         state.apply_action(action)
     # Get return for starting player
     reward = state.returns()[0]
