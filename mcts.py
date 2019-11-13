@@ -17,6 +17,7 @@ class Node:
         self.P = prior_p
         self.Q = 0
         self.N = 0
+        self.value = 0
         self.use_puct = use_puct
 
     def is_leaf(self):
@@ -76,7 +77,7 @@ class MCTS:
 
     def __init__(self, policy_fn, num_distinct_actions, **kwargs):
         self.num_distinct_actions = num_distinct_actions
-        self.c_puct = float(kwargs.get('c_puct', 5.0))
+        self.c_puct = float(kwargs.get('c_puct', 2.5))
         self.n_playouts = int(kwargs.get('n_playouts', 100))
         self.use_dirichlet = bool(kwargs.get('use_dirichlet', True))
         self.use_puct = bool(kwargs.get('use_puct', True))
@@ -107,6 +108,7 @@ class MCTS:
 
         # Back propagation
         # @todo check if this minus sign here makes sense
+        node.value = -leaf_value
         node.update_recursive(-leaf_value)
         return
 
@@ -118,6 +120,16 @@ class MCTS:
         """
         visits = [self.root.children[i].N if i in self.root.children else 0 for i in range(self.num_distinct_actions)]
         return [float(visit) / sum(visits) for visit in visits]
+
+    def get_value_changes(self):
+        """For now simply linear with the amount of visits.
+        @todo check how this is done in the alphaZero paper
+
+        @return:
+        """
+        changes = [max(0.0, self.root.children[i].value - self.root.children[i].Q)+0.0001 if i in self.root.children else 0.0 for i in range(self.num_distinct_actions)]
+        return [float(change) for change in changes]
+
 
     def search(self, state):
         # Expand the root with dirichlet noise if this is the first move of the game

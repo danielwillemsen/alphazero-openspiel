@@ -56,6 +56,9 @@ class AlphaZeroBot(pyspiel.Bot):
 
         # Perform the MCTS
         action_probabilities = np.array(self.mcts.search(state))
+        #if self.self_play:
+        #    value_probabilities = np.array(self.mcts.get_value_changes())
+        #    action_probabilities = 0.95 * action_probabilities + 0.05 * value_probabilities
 
         # Remove illegal actions
         legal_actions = state.legal_actions(state.current_player())
