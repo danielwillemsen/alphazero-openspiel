@@ -77,7 +77,7 @@ class MCTS:
 
     def __init__(self, policy_fn, num_distinct_actions, **kwargs):
         self.num_distinct_actions = num_distinct_actions
-        self.c_puct = float(kwargs.get('c_puct', 2.5))
+        self.c_puct = float(kwargs.get('c_puct', 5.0))
         self.n_playouts = int(kwargs.get('n_playouts', 100))
         self.use_dirichlet = bool(kwargs.get('use_dirichlet', True))
         self.use_puct = bool(kwargs.get('use_puct', True))

@@ -143,18 +143,18 @@ def play_game_self(policy_fn, game_name, **kwargs):
         # MC
         # examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, None])
         # TD
-        value = max([child.Q if child.N > 0 else -99.0 for child in alphazero_bot.mcts.root.children.values()])
-        examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, value])
+        #value = max([child.Q if child.N > 0 else -99.0 for child in alphazero_bot.mcts.root.children.values()])
+        #examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, value])
         # diff:
-        # node = alphazero_bot.mcts.root
-        # value_mult = -1
-        # while not node.is_leaf():
-        #     value = max([child.Q if child.N > 0 else -99.0 for child in node.children.values()])
-        #     value_list = {action: (child.Q if child.N>0 else -99.0) for action, child in node.children.items()}
-        #     action = max(value_list, key=value_list.get)
-        #     node = node.children[action]
-        #     value_mult *= -1
-        # examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, value*value_mult])
+        node = copy.deepcopy(alphazero_bot.mcts.root)
+        value_mult = 1
+        while not node.is_leaf():
+            value = node.Q
+            value_list = {action_temp: (child.Q if child.N>0 else -99.0) for action_temp, child in node.children.items()}
+            action_temp = max(value_list, key=value_list.get)
+            node = node.children[action_temp]
+            value_mult *= -1
+        examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, value*value_mult])
         state.apply_action(action)
     # Get return for starting player
     # reward = state.returns()[0]

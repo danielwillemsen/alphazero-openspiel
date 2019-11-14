@@ -14,10 +14,10 @@ if __name__ == '__main__':
     logger = logging.getLogger('alphazero')
     multiprocessing.set_start_method('spawn')
     trainer = Trainer()
-    trainer.current_net.load_state_dict(torch.load('./openspieltest30-TD.pth', map_location=trainer.device))
+    trainer.current_net.load_state_dict(torch.load('./openspieltest100-50_td_deep.pth', map_location=trainer.device))
 
     net2 = Net(trainer.state_shape, trainer.num_distinct_actions, device=trainer.device)
-    net2.load_state_dict(torch.load('./openspieltest30-25.pth', map_location=trainer.device))
+    net2.load_state_dict(torch.load('./openspieltest100.pth', map_location=trainer.device))
     net2.eval()
 
     n_tests = 100
