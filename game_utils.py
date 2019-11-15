@@ -1,10 +1,10 @@
 import numpy as np
 import pyspiel
 from open_spiel.python.algorithms import mcts
-from connect4net import state_to_board
+from network import state_to_board
 import copy
 from alphazerobot import AlphaZeroBot, NeuralNetBot
-from connect4net import Net
+from network import Net
 
 
 def play_game(game, player1, player2, generate_statistics=False):

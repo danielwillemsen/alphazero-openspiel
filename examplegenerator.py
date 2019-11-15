@@ -6,9 +6,9 @@ import pyspiel
 import torch
 import os
 from alphazerobot import AlphaZeroBot
-from connect4net import Net
+from network import Net
 from game_utils import play_game_self, test_zero_vs_mcts, test_net_vs_mcts
-from connect4net import state_to_board
+from network import state_to_board
 import copy
 import logging
 logger = logging.getLogger('alphazero')
@@ -83,9 +83,11 @@ def handle_gpu(net, parent_conns, device):
 
 
 class ExampleGenerator:
-    def __init__(self, net, game_name, device, **kwargs):
+    def __init__(self, net, game_name, device, n_pools=4, n_processes=50, **kwargs):
         self.is_test = bool(kwargs.get("is_test", False))
         self.device_count = torch.cuda.device_count()
+        self.n_pools = n_pools
+        self.n_processes = n_processes
         self.net = copy.deepcopy(net)
         self.net.to("cpu")
         self.net2 = copy.deepcopy(kwargs.get('net2', None))
@@ -120,7 +122,7 @@ class ExampleGenerator:
                 parent_conn2, child_conn2 = multiprocessing.Pipe()
                 parent_conns2.append(parent_conn2)
                 child_conns2.append(child_conn2)
-        pool = multiprocessing.Pool(processes=50, initializer=np.random.seed)
+        pool = multiprocessing.Pool(processes=self.n_processes, initializer=np.random.seed)
         gpu_handler = multiprocessing.Process(target=handle_gpu, args=(copy.deepcopy(self.net), parent_conns, device))
         gpu_handler2 = None
         if self.net2:
@@ -141,7 +143,7 @@ class ExampleGenerator:
         return [gpu_handler, pool, examples, child_conns, parent_conns, gpu_handler2, child_conns2, parent_conns2]
 
     def run_games(self, n_games, game_fn, *args):
-        n_pools = 4
+        n_pools = self.n_pools
         pools = []
         examples = []
         device_no = 1

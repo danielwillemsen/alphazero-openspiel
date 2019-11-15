@@ -10,7 +10,7 @@ from torch import multiprocessing
 from open_spiel.python.algorithms import mcts
 
 from alphazerobot import AlphaZeroBot, NeuralNetBot
-from connect4net import Net
+from network import Net
 from examplegenerator import ExampleGenerator
 from game_utils import *
 import logging
@@ -26,12 +26,14 @@ class Trainer:
         self.model_path = "models/"             # Path to save the models
         self.save = True                        # Save neural network
         self.save_n_gens = 10                   # How many iterations until network save
-        self.test_n_gens = 10                    # How many iterations until testing
-        self.n_tests = 200                     # How many tests to perform for testing
+        self.test_n_gens = 10                   # How many iterations until testing
+        self.n_tests = 200                      # How many tests to perform for testing
         self.use_gpu = True                     # Use GPU (if available)
+        self.n_pools = 4                        # Amount of worker pools to create (also amount of GPU's to utilize)
+        self.n_processes = 50                   # Amount of game processes to start for every pool.
 
         # Algorithm Parameters
-        self.n_games_per_generation = 500      # How many games to generate per iteration
+        self.n_games_per_generation = 500       # How many games to generate per iteration
         self.n_batches_per_generation = 500     # How batches of neural network training per iteration
         self.n_games_buffer_max = 20000         # How many games to store in FIFO buffer, at most. Buffer is grown.
         self.batch_size = 256                   # Batch size for neural network training
@@ -181,8 +183,10 @@ class Trainer:
         start = time.time()
 
         # Generate the examples
-        generator = ExampleGenerator(self.current_net, self.name_game,
-                                     self.device, n_playouts=self.n_playouts_train)
+        generator = ExampleGenerator(self.current_net, self.name_game, self.device,
+                                     n_pools=self.n_pools,
+                                     n_processes=self.n_processes,
+                                     n_playouts=self.n_playouts_train)
         games = generator.generate_examples(n_games)
         self.games_played += self.n_games_per_generation
 
@@ -206,8 +210,10 @@ class Trainer:
         """
         start = time.time()
         logger.info("Testing...")
-        generator = ExampleGenerator(self.current_net, self.name_game,
-                                     self.device, is_test=True)
+        generator = ExampleGenerator(self.current_net, self.name_game, self.device,
+                                     n_pools=self.n_pools,
+                                     n_processes=self.n_processes,
+                                     is_test=True)
         self.test_data['games_played'].append(self.games_played)
         # score_tot = 0.
         # for i in range(self.n_tests):
