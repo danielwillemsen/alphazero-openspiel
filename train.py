@@ -50,8 +50,7 @@ class Trainer:
         self.game = pyspiel.load_game(self.name_game)
         self.games_played = 0
         self.start_time = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-        self.test_data = {'games_played': [], 'zero_vs_random': [], 'zero_vs_mcts100': [], 'zero_vs_mcts200': [],
-                          'net_vs_random': [], 'net_vs_mcts100': [], 'net_vs_mcts200': []}
+
         # Initialize logger
         formatter = logging.Formatter('%(asctime)s %(message)s')
         logger.setLevel('DEBUG')
@@ -65,6 +64,7 @@ class Trainer:
         logger.addHandler(fh)
         logger.info('Logger started')
         logger.info(str(torch.cuda.is_available()))
+
         # Setup CUDA if possible
         if self.use_gpu:
             if not torch.cuda.is_available():
@@ -214,45 +214,23 @@ class Trainer:
                                      n_pools=self.n_pools,
                                      n_processes=self.n_processes,
                                      is_test=True)
-        self.test_data['games_played'].append(self.games_played)
-        # score_tot = 0.
-        # for i in range(self.n_tests):
-        #     score1, score2 = test_zero_vs_random(self.current_net.predict, self.game_name)
-        #     score_tot += score1
-        #     score_tot += score2
-        # avg = score_tot / (2 * self.n_tests)
-        # self.test_data['zero_vs_random'].append(avg)
-        # logger.info("Average score vs random:" + str(avg))
         score_tot = 0.
         for i in range(self.n_tests):
             score1, score2 = test_net_vs_random(self.current_net.predict, self.name_game)
             score_tot += score1
             score_tot += score2
         avg = score_tot / (2 * self.n_tests)
-        self.test_data['net_vs_random'].append(avg)
         logger.info("Average score vs random (net only):" + str(avg))
-        # score_tot = 0.
-        # for i in range(self.n_tests):
-        #     score1, score2 = test_zero_vs_mcts(self.current_net.predict, 100, self.name_game)
-        #     score_tot += score1
-        #     score_tot += score2
-        # avg = score_tot / (2 * self.n_tests)
-        # self.test_data['zero_vs_mcts100'].append(avg)
-        # logger.info("Average score vs mcts100:" + str(avg))
 
         avg = generator.generate_tests(self.n_tests, test_net_vs_mcts, 100)
-        self.test_data['net_vs_mcts100'].append(avg)
         logger.info("Average score vs mcts100 (net only):" + str(avg))
 
         avg = generator.generate_tests(self.n_tests, test_zero_vs_mcts, 200)
-        self.test_data['zero_vs_mcts200'].append(avg)
         logger.info("Average score vs mcts200:" + str(avg))
 
         avg = generator.generate_tests(self.n_tests, test_net_vs_mcts, 200)
-        self.test_data['net_vs_mcts200'].append(avg)
         logger.info("Average score vs mcts200 (net only):" + str(avg))
-        with open("logs/" + self.start_time + str(self.name_run) + ".p", 'wb') as f:
-            pickle.dump(self.test_data, f)
+
         logger.info("Testing took: " + str(time.time() - start) + "seconds")
         return
 

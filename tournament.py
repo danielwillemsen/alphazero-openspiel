@@ -14,19 +14,26 @@ if __name__ == '__main__':
     logger = logging.getLogger('alphazero')
     multiprocessing.set_start_method('spawn')
     trainer = Trainer()
-    trainer.current_net.load_state_dict(torch.load('./openspieltest400.pth', map_location=trainer.device))
+    trainer.current_net.load_state_dict(torch.load('./models/example_model_breakthrough(6x6).pth', map_location=trainer.device))
 
+    # The following sections tests an alphaZero bot against an MCTS bot.
+    # MCTS bot has 200 playouts, alphaZero has 100.
+    # With the example model on 6x6 breakthrough, alphaZero should win over 99% of games.
+    n_tests = 10
+    generator = ExampleGenerator(trainer.current_net, trainer.name_game,
+                                    trainer.device, is_test=True, generate_statistics=False)
+    generator.kwargs["settings1"] = {"n_playouts": 100}
+    avg_reward = generator.generate_tests(n_tests, test_zero_vs_mcts, 200)
+    logger.info("alphaZero won: " + str((avg_reward*0.5+0.5)*100.) + "% of games.")
+
+
+    # The following section has two alphaZero bots play against each other.
     n_tests = 1
     logger.info("n_tests: " + str(n_tests))
 
     agents = []
-    agents.append(["AlphaZero net 50", {"n_playouts": 100, "use_probabilistic_actions": True}])
-    agents.append(["AlphaZero net 100", {"n_playouts": 100, "use_probabilistic_actions": True}])
-
-    #agents.append(["AlphaZero 200 simulations", {"n_playouts": 200, "use_probabilistic_actions": True}])
-    #agents.append(["AlphaZero 400 simulations", {"n_playouts": 400, "use_probabilistic_actions": True}])
-    #agents.append(["AlphaZero 800 simulations", {"n_playouts": 800, "use_probabilistic_actions": True}])
-    #agents.append(["AlphaZero 1600 simulations", {"n_playouts": 1600, "use_probabilistic_actions": True}])
+    agents.append(["AlphaZero 100 playouts", {"n_playouts": 100, "use_probabilistic_actions": True}])
+    agents.append(["AlphaZero 200 playouts", {"n_playouts": 200, "use_probabilistic_actions": True}])
 
     logger.info(str(agents))
     generator = ExampleGenerator(trainer.current_net, trainer.name_game,

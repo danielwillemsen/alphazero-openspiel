@@ -83,7 +83,7 @@ def handle_gpu(net, parent_conns, device):
 
 
 class ExampleGenerator:
-    def __init__(self, net, game_name, device, n_pools=4, n_processes=50, **kwargs):
+    def __init__(self, net, game_name, device, n_pools=1, n_processes=1, **kwargs):
         self.is_test = bool(kwargs.get("is_test", False))
         self.device_count = torch.cuda.device_count()
         self.n_pools = n_pools
