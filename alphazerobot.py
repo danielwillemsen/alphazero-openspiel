@@ -37,6 +37,16 @@ class AlphaZeroBot(pyspiel.Bot):
         self.keep_search_tree = keep_search_tree
 
     def step(self, state):
+        """ Bot takes a step by running MCTS and selecting a move
+
+        Args:
+            state: current game state
+
+        Returns:
+            policy: list of actions and corresponding probabilities
+            action: real action that should be performed
+
+        """
         # Defaults to keep the tree during a game
         if self.keep_search_tree:
             action_history = state.history()
@@ -55,28 +65,28 @@ class AlphaZeroBot(pyspiel.Bot):
             self.mcts = MCTS(self.policy_fn, self.num_distinct_actions, **self.kwargs)
 
         # Perform the MCTS
-        action_probabilities = np.array(self.mcts.search(state))
+        normalized_visit_counts = np.array(self.mcts.search(state))
 
         # Remove illegal actions
         legal_actions = state.legal_actions(state.current_player())
-        action_probabilities = remove_illegal_actions(action_probabilities, legal_actions)
+        normalized_visit_counts = remove_illegal_actions(normalized_visit_counts, legal_actions)
 
         # Select the action, either probabilistically or simply the best.
         if self.use_probabilistic_actions and len(state.history()) < self.num_probabilistic_actions:
-            action = np.random.choice(len(action_probabilities), p=action_probabilities)
+            action = np.random.choice(len(normalized_visit_counts), p=normalized_visit_counts)
         else:
-            action = np.argmax(action_probabilities)
+            action = np.argmax(normalized_visit_counts)
 
         # This format is needed for the bot API
         policy = []
         for act in legal_actions:
-            policy.append((act, action_probabilities[act]))
+            policy.append((act, normalized_visit_counts[act]))
 
         return policy, action
 
 
 class NeuralNetBot(pyspiel.Bot):
-    """Bot which uses a combination of MCTS and a policy value net to calculate a move.
+    """ Bot which uses a Neural Network to come up with a move.
 
     """
 

@@ -38,8 +38,8 @@ class Trainer:
         self.n_games_buffer_max = 20000         # How many games to store in FIFO buffer, at most. Buffer is grown.
         self.batch_size = 256                   # Batch size for neural network training
         self.lr = 0.001                         # Learning rate for neural network
-        self.n_games_buffer = 4 * self.n_games_per_generation
-        self.n_playouts_train = 100
+        self.n_games_buffer = 2000              # Starting size of the buffer
+        self.n_playouts_train = 100             # Amount of simulations for the MCTS during training
 
         # Initialization of the trainer
         self.generation = 0
@@ -80,14 +80,19 @@ class Trainer:
         self.criterion_value = nn.MSELoss()
         self.current_net.eval()
 
-
+        # Log the settings.
         logger.info(self.__dict__)
         logger.info("Using:" + str(self.device))
 
     def net_step(self, flattened_buffer):
-        """Samples a random batch and updates the NN parameters with this bat
+        """ Samples a random batch and updates the NN parameters with this batch
 
-        @return:
+        Args:
+            flattened_buffer: a flat buffer with examples from which to sample from
+
+        Returns:
+            loss_p: loss of the policy criterion
+            loss_v: loss of the value criterion
         """
         self.current_net.zero_grad()
 
@@ -114,10 +119,10 @@ class Trainer:
         self.optimizer.step()
         return loss_p, loss_v
 
-    def train_network(self, n_batches):
-        """Trains the neural network for batches_per_generation batches
+    def train_network(self):
+        """Trains the neural network for batches_per_generation batches.
 
-        @return:
+
         """
         logger.info("Training Network")
         self.current_net.train()
@@ -126,7 +131,7 @@ class Trainer:
         loss_tot_v = 0
         loss_tot_p = 0
 
-        for i in range(n_batches):
+        for i in range(self.n_batches_per_generation):
             loss_p, loss_v = self.net_step(flattened_buffer)
             loss_tot_p += loss_p
             v = loss_v
@@ -140,9 +145,19 @@ class Trainer:
 
     @staticmethod
     def remove_duplicates(flattened_buffer):
+        """Removes duplicates from a flattened buffer by averaging values and policy.
+
+        Args:
+            flattened_buffer: flat buffer with examples from where the duplicates need to be removed.
+
+        Returns: flat buffer with duplicates removed.
+
+        """
+
         logger.info("Removing duplciates")
         logger.info("Initial amount of samples: " + str(len(flattened_buffer)))
         start = time.time()
+
         # Remove duplicates
         flattened_buffer_dict = dict()
         flattened_buffer_counts = dict()
@@ -168,7 +183,8 @@ class Trainer:
     def generate_examples(self, n_games):
         """Generates new games in a multithreaded way.
 
-        @param n_games: amount of games to generate
+        Arg:
+            n_games: amount of games to generate
         """
         logger.info("Generating Data")
         # Generate new training samples
@@ -196,6 +212,7 @@ class Trainer:
         logger.info("Finished Generating Data (threaded). Took: " + str(time.time() - start) + " seconds")
         logger.info("Total amount of games played:" + str(self.generation*self.n_games_per_generation))
         self.update_buffer_size()
+
         # Remove oldest entries from buffer if too long
         if len(self.buffer) > self.n_games_buffer:
             logger.info("Buffer full. Deleting oldest samples.")
@@ -205,8 +222,6 @@ class Trainer:
     def test_agent(self):
         """Tests the current agent
         Tests against random opponents and pure MCTS agents
-
-        @return: None
         """
         start = time.time()
         logger.info("Testing...")
@@ -236,14 +251,13 @@ class Trainer:
 
     def run(self):
         """Main alphaZero training loop
-        @return:
         """
         self.test_agent()         # Start with testing the agent
         while True:
             self.generation += 1
             logger.info("Generation:" + str(self.generation))
-            self.generate_examples(self.n_games_per_generation)         # Generate new games through self-play
-            self.train_network(self.n_batches_per_generation)           # Train network on games in the buffer
+            self.generate_examples(self.n_games_per_generation)     # Generate new games through self-play
+            self.train_network()                                    # Train network on games in the buffer
 
             # Perform testing periodically
             if self.generation % self.test_n_gens == 0:                      # Test the alphaZero bot against MCTS bots
