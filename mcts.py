@@ -57,9 +57,9 @@ class Node:
         @return: Q plus bonus value (for exploration)
         """
         if self.use_puct:
-            return self.Q + c_puct * self.P * np.sqrt(self.parent.N) / (self.N+1)
+            return self.Q + c_puct * self.P * math.sqrt(self.parent.N) / (self.N+1)
         else:
-            return float('inf') if self.N == 0 else self.Q + c_puct * self.P * np.sqrt(math.log(self.parent.N) / (self.N))
+            return float('inf') if self.N == 0 else self.Q + c_puct * self.P * math.sqrt(math.log(self.parent.N) / (self.N))
 
     def update(self, value):
         self.Q = (self.N * self.Q + value) / (self.N + 1)
@@ -77,7 +77,7 @@ class MCTS:
 
     def __init__(self, policy_fn, num_distinct_actions, **kwargs):
         self.num_distinct_actions = num_distinct_actions
-        self.c_puct = float(kwargs.get('c_puct', 5.0))
+        self.c_puct = float(kwargs.get('c_puct', 2.5))
         self.n_playouts = int(kwargs.get('n_playouts', 100))
         self.use_dirichlet = bool(kwargs.get('use_dirichlet', True))
         self.use_puct = bool(kwargs.get('use_puct', True))

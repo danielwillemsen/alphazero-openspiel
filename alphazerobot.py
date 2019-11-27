@@ -31,6 +31,7 @@ class AlphaZeroBot(pyspiel.Bot):
         self.use_probabilistic_actions = self_play
         if not self.use_probabilistic_actions:
             self.use_probabilistic_actions = bool(kwargs.get("use_probabilistic_actions"))
+        self.use_random_actions = bool(kwargs.get("use_random_actions", False))
         self.num_probabilistic_actions = int(kwargs.get("num_probabilistic_actions", 1000))
         self.mcts = MCTS(self.policy_fn, self.num_distinct_actions, **kwargs)
         self.self_play = self_play
@@ -55,7 +56,8 @@ class AlphaZeroBot(pyspiel.Bot):
             self.mcts = MCTS(self.policy_fn, self.num_distinct_actions, **self.kwargs)
 
         # Perform the MCTS
-        action_probabilities = np.array(self.mcts.search(state))
+        temp = 1.0
+        action_probabilities = np.array(self.mcts.search(state))**(1./temp)
         #if self.self_play:
         #    value_probabilities = np.array(self.mcts.get_value_changes())
         #    action_probabilities = 0.95 * action_probabilities + 0.05 * value_probabilities
@@ -65,7 +67,9 @@ class AlphaZeroBot(pyspiel.Bot):
         action_probabilities = remove_illegal_actions(action_probabilities, legal_actions)
 
         # Select the action, either probabilistically or simply the best.
-        if self.use_probabilistic_actions and len(state.history()) < self.num_probabilistic_actions:
+        if self.use_random_actions and len(state.history()) < self.num_probabilistic_actions:
+            action = np.random.choice(legal_actions)
+        elif self.use_probabilistic_actions and len(state.history()) < self.num_probabilistic_actions:
             action = np.random.choice(len(action_probabilities), p=action_probabilities)
         else:
             action = np.argmax(action_probabilities)

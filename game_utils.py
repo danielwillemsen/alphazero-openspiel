@@ -133,6 +133,8 @@ def play_game_self(policy_fn, game_name, **kwargs):
     state_shape = game.information_state_normalized_vector_shape()
     num_distinct_actions = game.num_distinct_actions()
     alphazero_bot = AlphaZeroBot(game, 0, policy_fn, self_play=True, **kwargs)
+    backup_type = str(kwargs.get("backup", "MC"))
+    tree_strap = str(kwargs.get("tree_strap", False))
     while not state.is_terminal():
         policy, action = alphazero_bot.step(state)
         policy_dict = dict(policy)
@@ -141,24 +143,78 @@ def play_game_self(policy_fn, game_name, **kwargs):
             # Create a policy list. To be used in the net instead of a list of tuples.
             policy_list.append(policy_dict.get(i, 0.0))
         # MC
-        # examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, None])
+        if backup_type == "on-policy":
+            examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, None])
+        # Soft-Z
+        if backup_type == "soft-Z":
+            if tree_strap:
+                examples.append([state.information_state(), state_to_board(state, state_shape), policy_list,
+                                 -alphazero_bot.mcts.root.Q, []])
+                tree_strap_examples = get_examples_tree_strap_soft_Z(alphazero_bot.mcts.root, state.clone(), state_shape)
+                examples[-1][4] = tree_strap_examples
+            else:
+                examples.append([state.information_state(), state_to_board(state, state_shape), policy_list,
+                                 -alphazero_bot.mcts.root.Q])
+
         # TD
-        #value = max([child.Q if child.N > 0 else -99.0 for child in alphazero_bot.mcts.root.children.values()])
-        #examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, value])
+        if backup_type == "A0C":
+            value = max([child.Q if child.N > 0 else -99.0 for child in alphazero_bot.mcts.root.children.values()])
+            examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, value])
         # diff:
-        node = copy.deepcopy(alphazero_bot.mcts.root)
+        if backup_type == "off-policy":
+            node = copy.deepcopy(alphazero_bot.mcts.root)
+            value_mult = 1
+            while not node.is_leaf():
+                value = node.Q
+                value_list = {action_temp: (child.N if child.N>0 else -99.0) for action_temp, child in node.children.items()}
+                action_temp = max(value_list, key=value_list.get)
+                node = node.children[action_temp]
+                value_mult *= -1
+            if tree_strap:
+                examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, value*value_mult, []])
+                tree_strap_examples = get_examples_tree_strap_off_policy(alphazero_bot.mcts.root, state.clone(), state_shape)
+                examples[-1][4] = tree_strap_examples
+            else:
+                examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, value*value_mult])
+        state.apply_action(action)
+    # Get return for starting player
+    if backup_type == "on-policy":
+        reward = state.returns()[0]
+        for i in range(len(examples)):
+            examples[i][3] = reward
+            reward *= -1
+    return examples
+
+def get_examples_tree_strap_off_policy(node, state, state_shape):
+    examples = []
+    if node.N > 20 and not state.is_terminal():
+        for action_temp, child in node.children.items():
+            if child.N > 20:
+                temp_state = state.clone()
+                temp_state.apply_action(action_temp)
+                single_examples = get_examples_tree_strap_off_policy(child, temp_state, state_shape)
+                for example in single_examples:
+                    examples.append(example)
         value_mult = 1
         while not node.is_leaf():
             value = node.Q
-            value_list = {action_temp: (child.Q if child.N>0 else -99.0) for action_temp, child in node.children.items()}
+            value_list = {action_temp: (child.N if child.N > 0 else -99.0) for action_temp, child in node.children.items()}
             action_temp = max(value_list, key=value_list.get)
             node = node.children[action_temp]
             value_mult *= -1
-        examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, value*value_mult])
-        state.apply_action(action)
-    # Get return for starting player
-    # reward = state.returns()[0]
-    # for i in range(len(examples)):
-    #     examples[i][3] = reward
-    #     reward *= -1
+        examples.append([state.information_state(), state_to_board(state, state_shape), None, value*value_mult])
+    return examples
+
+def get_examples_tree_strap_soft_Z(node, state, state_shape):
+    examples = []
+    if node.N > 20 and not state.is_terminal():
+        for action_temp, child in node.children.items():
+            if child.N > 20:
+                temp_state = state.clone()
+                temp_state.apply_action(action_temp)
+                single_examples = get_examples_tree_strap_soft_Z(child, temp_state, state_shape)
+                for example in single_examples:
+                    examples.append(example)
+        value = node.Q
+        examples.append([state.information_state(), state_to_board(state, state_shape), None, value*-1])
     return examples

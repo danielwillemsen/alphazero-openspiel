@@ -1,3 +1,6 @@
+import sys
+sys.path.append("/export/scratch1/home/jdw/alphazero/open_spiel")
+sys.path.append("/export/scratch1/home/jdw/alphazero/open_spiel/build/python")
 import pickle
 import time
 from datetime import datetime
@@ -19,10 +22,10 @@ logger = logging.getLogger('alphazero')
 
 
 class Trainer:
-    def __init__(self):
+    def __init__(self, name="openspieltest", backup="on-policy"):
         # Experiment Parameters
-        self.name_game = "breakthrough(rows=6,columns=6)"         # Name of game (should be from open_spiel library)
-        self.name_run = "openspieltest"         # Name of run
+        self.name_game = "connect_four" #"breakthrough(rows=6,columns=6)"         # Name of game (should be from open_spiel library)
+        self.name_run = name         # Name of run
         self.model_path = "models/"             # Path to save the models
         self.save = True                        # Save neural network
         self.save_n_gens = 10                   # How many iterations until network save
@@ -31,13 +34,15 @@ class Trainer:
         self.use_gpu = True                     # Use GPU (if available)
 
         # Algorithm Parameters
-        self.n_games_per_generation = 500      # How many games to generate per iteration
+        self.n_games_per_generation = 500       # How many games to generate per iteration
         self.n_batches_per_generation = 500     # How batches of neural network training per iteration
         self.n_games_buffer_max = 20000         # How many games to store in FIFO buffer, at most. Buffer is grown.
         self.batch_size = 256                   # Batch size for neural network training
         self.lr = 0.001                         # Learning rate for neural network
         self.n_games_buffer = 4 * self.n_games_per_generation
         self.n_playouts_train = 100
+        self.backup = backup
+        self.tree_strap = False
 
         # Initialization of the trainer
         self.generation = 0
@@ -63,6 +68,7 @@ class Trainer:
         logger.addHandler(fh)
         logger.info('Logger started')
         logger.info(str(torch.cuda.is_available()))
+        logger.info(str(backup))
         # Setup CUDA if possible
         if self.use_gpu:
             if not torch.cuda.is_available():
@@ -106,11 +112,64 @@ class Trainer:
         loss_v = self.criterion_value(v_t, v_r.unsqueeze(1))
         loss_p = -torch.sum(p_r * torch.log(p_t)) / p_r.size()[0]
 
+        if self.tree_strap:
+            x_v = [item[1] for i in sample_ids for item in flattened_buffer[i][4]]
+            v_r_v = [item[3] for i in sample_ids for item in flattened_buffer[i][4]]
+            if len(x_v) > 0:
+                x_v = torch.from_numpy(np.array(x_v)).float().to(self.device)
+                v_r_v = torch.tensor(np.array(v_r_v)).float().to(self.device)
+                _, v_t_v = self.current_net(x_v)
+                loss_v_tree = self.criterion_value(v_t_v, v_r_v.unsqueeze(1))
+                loss_v = 0.5*loss_v + 0.5*  loss_v_tree
+
         # loss_p = self.criterion_policy(p_t, p_r)
         loss = loss_v + loss_p
         loss.backward()
         self.optimizer.step()
         return loss_p, loss_v
+
+    # def net_step(self, flattened_buffer):
+    #     """Samples a random batch and updates the NN parameters with this bat
+    #
+    #     @return:
+    #     """
+    #     self.current_net.zero_grad()
+    #
+    #     # Select samples and format them to use as batch
+    #     sample_ids = np.random.randint(len(flattened_buffer), size=self.batch_size)
+    #     x = [flattened_buffer[i][1] for i in sample_ids]
+    #     p_r = [flattened_buffer[i][2] for i in sample_ids]
+    #     v_r = [flattened_buffer[i][3] for i in sample_ids]
+    #
+    #     x_v = [item[1] for i in sample_ids for item in flattened_buffer[i][4]]
+    #     v_r_v = [item[3] for i in sample_ids for item in flattened_buffer[i][4]]
+    #
+    #     x = torch.from_numpy(np.array(x)).float().to(self.device)
+    #     p_r = torch.tensor(np.array(p_r)).float().to(self.device)
+    #     v_r = torch.tensor(np.array(v_r)).float().to(self.device)
+    #
+    #     if len(x_v) > 0:
+    #         x_v = torch.from_numpy(np.array(x_v)).float().to(self.device)
+    #         v_r_v = torch.tensor(np.array(v_r_v)).float().to(self.device)
+    #         _, v_t_v = self.current_net(x_v)
+    #
+    #     # Pass through network
+    #     p_t, v_t = self.current_net(x)
+    #
+    #     # Backward pass
+    #     if len(x_v) > 0:
+    #         #print(len(x_v))
+    #         loss_v = self.criterion_value(v_t, v_r.unsqueeze(1)) + self.criterion_value(v_t_v, v_r_v.unsqueeze(1))
+    #     else:
+    #         loss_v = self.criterion_value(v_t, v_r.unsqueeze(1))
+    #
+    #     loss_p = -torch.sum(p_r * torch.log(p_t)) / p_r.size()[0]
+    #
+    #     # loss_p = self.criterion_policy(p_t, p_r)
+    #     loss = loss_v + loss_p
+    #     loss.backward()
+    #     self.optimizer.step()
+    #     return loss_p, loss_v
 
     def train_network(self, n_batches):
         """Trains the neural network for batches_per_generation batches
@@ -136,8 +195,7 @@ class Trainer:
                 loss_tot_p = 0
         self.current_net.eval()
 
-    @staticmethod
-    def remove_duplicates(flattened_buffer):
+    def remove_duplicates(self, flattened_buffer):
         logger.info("Removing duplciates")
         logger.info("Initial amount of samples: " + str(len(flattened_buffer)))
         start = time.time()
@@ -150,6 +208,8 @@ class Trainer:
                 flattened_buffer_dict[item[0]][2] = [sum(x) for x in zip(flattened_buffer_dict[item[0]][2], item[2])]
                 # Average value
                 flattened_buffer_dict[item[0]][3] += item[3]
+                if self.tree_strap:
+                    flattened_buffer_dict[item[0]][4] = item[4]
                 flattened_buffer_counts[item[0]] += 1
 
             else:
@@ -182,7 +242,8 @@ class Trainer:
 
         # Generate the examples
         generator = ExampleGenerator(self.current_net, self.name_game,
-                                     self.device, n_playouts=self.n_playouts_train)
+                                     self.device, n_playouts=self.n_playouts_train,
+                                     backup=self.backup, tree_strap=self.tree_strap)
         games = generator.generate_examples(n_games)
         self.games_played += self.n_games_per_generation
 
@@ -255,7 +316,7 @@ class Trainer:
         @return:
         """
         self.test_agent()         # Start with testing the agent
-        while True:
+        while self.generation < 101:
             self.generation += 1
             logger.info("Generation:" + str(self.generation))
             self.generate_examples(self.n_games_per_generation)         # Generate new games through self-play
@@ -279,5 +340,21 @@ class Trainer:
 if __name__ == '__main__':
     logger = logging.getLogger('alphazero')
     multiprocessing.set_start_method('spawn')
-    trainer = Trainer()
+
+    backup_name = "soft-Z"
+    trainer = Trainer(name=backup_name, backup=backup_name)
+    # trainer.tree_strap = True
+    trainer.run()
+
+    # backup_name = "A0C"
+    # trainer = Trainer(name=backup_name, backup=backup_name)
+    # trainer.run()
+
+    backup_name = "off-policy"
+    trainer = Trainer(name=backup_name,backup=backup_name)
+    #trainer.tree_strap = True
+    trainer.run()
+
+    backup_name = "on-policy"
+    trainer = Trainer(name=backup_name, backup=backup_name)
     trainer.run()
