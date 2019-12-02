@@ -24,7 +24,7 @@ class AlphaZeroBot(pyspiel.Bot):
     """
 
     def __init__(self, game, player, policy_fn, self_play=False, keep_search_tree=True, **kwargs):
-        super(AlphaZeroBot, self).__init__(game, player)
+        #super(AlphaZeroBot, self).__init__(game, player)
         self.num_distinct_actions = game.num_distinct_actions()
         self.policy_fn = policy_fn
         self.kwargs = kwargs
@@ -34,6 +34,7 @@ class AlphaZeroBot(pyspiel.Bot):
         self.use_random_actions = bool(kwargs.get("use_random_actions", False))
         self.num_probabilistic_actions = int(kwargs.get("num_probabilistic_actions", 1000))
         self.mcts = MCTS(self.policy_fn, self.num_distinct_actions, **kwargs)
+        self.temperature = float(kwargs.get("temperature", 1.0))
         self.self_play = self_play
         self.keep_search_tree = keep_search_tree
 
@@ -57,15 +58,16 @@ class AlphaZeroBot(pyspiel.Bot):
 
         # Perform the MCTS
         temp = 1.0
-        action_probabilities = np.array(self.mcts.search(state))**(1./temp)
+        normalized_visit_counts = np.array(self.mcts.search(state))
         #if self.self_play:
         #    value_probabilities = np.array(self.mcts.get_value_changes())
         #    action_probabilities = 0.95 * action_probabilities + 0.05 * value_probabilities
 
         # Remove illegal actions
         legal_actions = state.legal_actions(state.current_player())
-        action_probabilities = remove_illegal_actions(action_probabilities, legal_actions)
+        normalized_visit_counts = remove_illegal_actions(normalized_visit_counts, legal_actions)
 
+        action_probabilities = normalized_visit_counts**(1./self.temperature)/sum(normalized_visit_counts**(1./self.temperature))
         # Select the action, either probabilistically or simply the best.
         if self.use_random_actions and len(state.history()) < self.num_probabilistic_actions:
             action = np.random.choice(legal_actions)
@@ -77,7 +79,7 @@ class AlphaZeroBot(pyspiel.Bot):
         # This format is needed for the bot API
         policy = []
         for act in legal_actions:
-            policy.append((act, action_probabilities[act]))
+            policy.append((act, normalized_visit_counts[act]))
 
         return policy, action
 

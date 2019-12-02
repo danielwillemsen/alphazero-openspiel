@@ -144,7 +144,23 @@ def play_game_self(policy_fn, game_name, **kwargs):
             policy_list.append(policy_dict.get(i, 0.0))
         # MC
         if backup_type == "on-policy":
-            examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, None])
+            if tree_strap:
+
+                examples.append([state.information_state(), state_to_board(state, state_shape), policy_list,
+                                 None , []])
+                for action_temp, child_temp in alphazero_bot.mcts.root.children.items():
+                    if child_temp.N > 10:  # The five is a tunable hyperparameter
+                        copy_state = state.clone()
+                        copy_state.apply_action(action_temp)
+                        if not copy_state.is_terminal():
+                            examples[-1][4].append(
+                                [copy_state.information_state(), state_to_board(copy_state, state_shape), None,
+                                 -child_temp.Q])
+                # tree_strap_examples = get_examples_tree_strap_soft_Z(alphazero_bot.mcts.root, state.clone(), state_shape)
+                # examples[-1][4] = tree_strap_examples
+            else:
+                examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, None])
+
         # Soft-Z
         if backup_type == "soft-Z":
             if tree_strap:
@@ -170,6 +186,9 @@ def play_game_self(policy_fn, game_name, **kwargs):
                 action_temp = max(value_list, key=value_list.get)
                 node = node.children[action_temp]
                 value_mult *= -1
+            if node.N > 0:
+                value = node.Q
+                value_mult *=-1
             if tree_strap:
                 examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, value*value_mult, []])
                 tree_strap_examples = get_examples_tree_strap_off_policy(alphazero_bot.mcts.root, state.clone(), state_shape)
@@ -218,3 +237,24 @@ def get_examples_tree_strap_soft_Z(node, state, state_shape):
         value = node.Q
         examples.append([state.information_state(), state_to_board(state, state_shape), None, value*-1])
     return examples
+
+# def get_examples_tree_strap_soft_Z(node, state, state_shape, num_distinct_actions):
+#     examples = []
+#     if node.N > 15 and not state.is_terminal():
+#         for action_temp, child in node.children.items():
+#             if child.N > 15:
+#                 temp_state = state.clone()
+#                 temp_state.apply_action(action_temp)
+#                 single_examples = get_examples_tree_strap_soft_Z(child, temp_state, state_shape, num_distinct_actions)
+#                 for example in single_examples:
+#                     examples.append(example)
+#         value = node.Q
+#         visits = [node.children[i].N if i in node.children else 0 for i in range(num_distinct_actions)]
+#         normalized_visit_counts = [float(visit) / sum(visits) for visit in visits]
+#         legal_actions = state.legal_actions(state.current_player())
+#         action_probabilities = remove_illegal_actions(np.array(normalized_visit_counts), legal_actions)
+#         policy = []
+#         for act in legal_actions:
+#             policy.append(action_probabilities[act])
+#         examples.append([state.information_state(), state_to_board(state, state_shape), action_probabilities.tolist(), value*-1])
+#     return examples

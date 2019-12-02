@@ -40,6 +40,10 @@ class Trainer:
         self.batch_size = 256                   # Batch size for neural network training
         self.lr = 0.001                         # Learning rate for neural network
         self.n_games_buffer = 4 * self.n_games_per_generation
+        self.temperature = 1.0
+        self.dirichlet_ratio = 0.25
+        self.uct_train = 2.5
+        self.uct_test = 1.5
         self.n_playouts_train = 100
         self.backup = backup
         self.tree_strap = False
@@ -115,12 +119,17 @@ class Trainer:
         if self.tree_strap:
             x_v = [item[1] for i in sample_ids for item in flattened_buffer[i][4]]
             v_r_v = [item[3] for i in sample_ids for item in flattened_buffer[i][4]]
+            # p_r_v = [item[2] for i in sample_ids for item in flattened_buffer[i][4]]
             if len(x_v) > 0:
                 x_v = torch.from_numpy(np.array(x_v)).float().to(self.device)
                 v_r_v = torch.tensor(np.array(v_r_v)).float().to(self.device)
-                _, v_t_v = self.current_net(x_v)
+                # p_r_v = torch.tensor(np.array(p_r_v)).float().to(self.device)
+
+                p_t_v, v_t_v = self.current_net(x_v)
                 loss_v_tree = self.criterion_value(v_t_v, v_r_v.unsqueeze(1))
-                loss_v = 0.5*loss_v + 0.5*  loss_v_tree
+                # loss_p_tree =-torch.sum(p_r_v * torch.log(p_t_v)) / p_r_v.size()[0]
+                loss_v = 0.5*loss_v + 0.5*loss_v_tree
+                # loss_p = 0.5*loss_p + 0.5*loss_p_tree
 
         # loss_p = self.criterion_policy(p_t, p_r)
         loss = loss_v + loss_p
@@ -242,7 +251,8 @@ class Trainer:
 
         # Generate the examples
         generator = ExampleGenerator(self.current_net, self.name_game,
-                                     self.device, n_playouts=self.n_playouts_train,
+                                     self.device, n_playouts=self.n_playouts_train, temperature=self.temperature,
+                                     dirichlet_ratio=self.dirichlet_ratio, c_puct=self.uct_train,
                                      backup=self.backup, tree_strap=self.tree_strap)
         games = generator.generate_examples(n_games)
         self.games_played += self.n_games_per_generation
@@ -268,7 +278,8 @@ class Trainer:
         start = time.time()
         logger.info("Testing...")
         generator = ExampleGenerator(self.current_net, self.name_game,
-                                     self.device, is_test=True)
+                                     self.device, is_test=True, temperature=self.temperature,
+                                     dirichlet_ratio=self.dirichlet_ratio, c_puct=self.uct_test)
         self.test_data['games_played'].append(self.games_played)
         # score_tot = 0.
         # for i in range(self.n_tests):
@@ -341,20 +352,41 @@ if __name__ == '__main__':
     logger = logging.getLogger('alphazero')
     multiprocessing.set_start_method('spawn')
 
-    backup_name = "soft-Z"
-    trainer = Trainer(name=backup_name, backup=backup_name)
-    # trainer.tree_strap = True
-    trainer.run()
+
+
+    # for dirichlet_ratio in [0.15,0.25,0.35]:
+    #     backup_name = "on-policy"
+    #     trainer = Trainer(name=str(backup_name) + "dirichlet_ratio" + str(dirichlet_ratio), backup=backup_name)
+    #     trainer.dirichlet_ratio = dirichlet_ratio
+    #     trainer.run()
+
+    for temperature in [0.75,1.0,1.5,2.0]:
+        backup_name = "on-policy"
+        trainer = Trainer(name=str(backup_name) + "temperature" + str(temperature), backup=backup_name)
+        trainer.temperature = temperature
+        trainer.run()
+
+    # for uct in [1.5, 2.0, 2.5, 3.0, 3.5]:
+    #     backup_name = "on-policy"
+    #     trainer = Trainer(name=str(backup_name) + "uct" + str(uct), backup=backup_name)
+    #     trainer.uct_train = uct
+    #     trainer.run()
+
+
+    # backup_name = "soft-Z"
+    # trainer = Trainer(name=backup_name, backup=backup_name)
+    # # trainer.tree_strap = True
+    # trainer.run()
 
     # backup_name = "A0C"
     # trainer = Trainer(name=backup_name, backup=backup_name)
     # trainer.run()
+    #
+    # backup_name = "off-policy"
+    # trainer = Trainer(name=backup_name,backup=backup_name)
+    # #trainer.tree_strap = True
+    # trainer.run()
 
-    backup_name = "off-policy"
-    trainer = Trainer(name=backup_name,backup=backup_name)
-    #trainer.tree_strap = True
-    trainer.run()
-
-    backup_name = "on-policy"
-    trainer = Trainer(name=backup_name, backup=backup_name)
-    trainer.run()
+    # backup_name = "on-policy"
+    # trainer = Trainer(name=backup_name, backup=backup_name)
+    # trainer.run()

@@ -17,6 +17,7 @@ class Node:
         self.P = prior_p
         self.Q = 0
         self.N = 0
+        self.V = 0
         self.value = 0
         self.use_puct = use_puct
 
@@ -78,6 +79,7 @@ class MCTS:
     def __init__(self, policy_fn, num_distinct_actions, **kwargs):
         self.num_distinct_actions = num_distinct_actions
         self.c_puct = float(kwargs.get('c_puct', 2.5))
+        self.dirichlet_ratio = float(kwargs.get('dirichlet_ratio', 0.25))
         self.n_playouts = int(kwargs.get('n_playouts', 100))
         self.use_dirichlet = bool(kwargs.get('use_dirichlet', True))
         self.use_puct = bool(kwargs.get('use_puct', True))
@@ -109,6 +111,7 @@ class MCTS:
         # Back propagation
         # @todo check if this minus sign here makes sense
         node.value = -leaf_value
+        node.V = -leaf_value
         node.update_recursive(-leaf_value)
         return
 
@@ -120,6 +123,8 @@ class MCTS:
         """
         visits = [self.root.children[i].N if i in self.root.children else 0 for i in range(self.num_distinct_actions)]
         return [float(visit) / sum(visits) for visit in visits]
+        # visits = [(self.root.children[i].Q+1.0)**4 if i in self.root.children and self.root.children[i].N > 0 else 0.0001 for i in range(self.num_distinct_actions)]
+        # return [float(visit) / sum(visits) for visit in visits]
 
     def get_value_changes(self):
         """For now simply linear with the amount of visits.
@@ -145,10 +150,10 @@ class MCTS:
         prior_ps, leaf_value = self.policy_fn(state)
         legal_actions = state.legal_actions(state.current_player())
         if self.use_dirichlet:
-            prior_ps = (0.75 * np.array(prior_ps))
+            prior_ps = ((1.0-self.dirichlet_ratio) * np.array(prior_ps))
             dirichlet = list(np.random.dirichlet(0.3 * np.ones(len(legal_actions))))
             for i, action in enumerate(legal_actions):
-                prior_ps[action] = prior_ps[action] + 0.25*dirichlet[i]
+                prior_ps[action] = prior_ps[action] + self.dirichlet_ratio*dirichlet[i]
         self.root.expand(prior_ps, legal_actions)
 
     def update_root(self, action):
