@@ -34,13 +34,23 @@ class Net(nn.Module):
 
         self.device = kwargs.get('device', torch.device('cpu'))
         self.time1 = time.time()
+        self.n_filts = 100
+        self.resblock1 = ResidualBlock(self.num_filters_input, self.n_filts)
+        self.resblock2 = ResidualBlock(self.n_filts, self.n_filts)
+        self.resblock3 = ResidualBlock(self.n_filts, self.n_filts)
+        self.resblock4 = ResidualBlock(self.n_filts, self.n_filts)
+        self.resblock5 = ResidualBlock(self.n_filts, self.n_filts)
+        #self.resblock6 = ResidualBlock(50, 50)
+        #self.resblock7 = ResidualBlock(50, 50)
+        #self.resblock8 = ResidualBlock(50, 50)
+        #self.resblock9 = ResidualBlock(50, 50)
+        #self.resblock10 = ResidualBlock(50, 50)
+        self.fc1v = nn.Linear(self.n_filts*self.width*self.height, 100)
+        self.fc1p = nn.Linear(self.n_filts*self.width*self.height, 100)
 
-        self.resblock1 = ResidualBlock(self.num_filters_input, 50)
-        self.resblock2 = ResidualBlock(50, 50)
-        self.resblock3 = ResidualBlock(50, 50)
-        self.resblock4 = ResidualBlock(50, 50)
-        self.resblock5 = ResidualBlock(50, 50)
-        self.fc1 = nn.Linear(50*self.width*self.height, self.num_distinct_actions + 1)
+        self.fc2v = nn.Linear(100, 1)
+        self.fc2p = nn.Linear(100, self.num_distinct_actions)
+        # self.fc1 = nn.Linear(50*self.width*self.height, self.num_distinct_actions + 1)
         return
 
     def forward(self, x):
@@ -54,11 +64,26 @@ class Net(nn.Module):
         x = self.resblock3(x)
         x = self.resblock4(x)
         x = self.resblock5(x)
+        #x = self.resblock6(x)
+        #x = self.resblock7(x)
+        #x = self.resblock8(x)
+        #x = self.resblock9(x)
+        #x = self.resblock10(x)
 
-        x = x.view(-1, self.height * self.width * 50)
-        x = self.fc1(x)
-        xp, v = x.split(self.num_distinct_actions, 1)
-        return F.softmax(xp, dim=1), torch.tanh(v)
+        x = x.view(-1, self.height * self.width * self.n_filts)
+
+        xv = F.leaky_relu(self.fc1v(x))
+        xp = F.leaky_relu(self.fc1p(x))
+        # x = F.leaky_relu(self.fc1_bn(self.fc1(x)))
+        # x = elf.fc2(x)
+        # xp, v = x.split(self.num_distinct_actions, 1)
+        #return F.softmax(xp, dim=1), torch.tanh(v)
+        return F.softmax(self.fc2p(xp), dim=1), torch.tanh(self.fc2v(xv))
+
+        # x = x.view(-1, self.height * self.width * 50)
+        # x = self.fc1(x)
+        # xp, v = x.split(self.num_distinct_actions, 1)
+        # return F.softmax(xp, dim=1), torch.tanh(v)
 
     def predict(self, state):
         """
@@ -106,9 +131,14 @@ class NetOld(nn.Module):
         # self.bn5 = nn.BatchNorm2d(50)
         # self.conv6 = nn.Conv2d(50, 50, (4, 4), padding=1)
         # self.bn6 = nn.BatchNorm2d(50)
-        self.fc1 = nn.Linear(self.height * self.width * 50, 50)
-        self.fc1_bn = nn.BatchNorm1d(50)
-        self.fc2 = nn.Linear(50, self.num_distinct_actions + 1)
+        # self.fc1 = nn.Linear(self.height * self.width * 50, 50)
+        # self.fc1_bn = nn.BatchNorm1d(50)
+        # self.fc2 = nn.Linear(50, self.num_distinct_actions + 1)
+        self.fc1v = nn.Linear(50*self.width*self.height, 100)
+        self.fc1p = nn.Linear(50*self.width*self.height, 100)
+
+        self.fc2v = nn.Linear(100, 1)
+        self.fc2p = nn.Linear(100, self.num_distinct_actions)
         return
 
     def forward(self, x):
@@ -125,10 +155,15 @@ class NetOld(nn.Module):
         # x = F.leaky_relu(self.bn6(self.conv6(x)))
 
         x = x.view(-1, (self.height) * (self.width) * 50)
-        x = F.leaky_relu(self.fc1_bn(self.fc1(x)))
-        x = self.fc2(x)
-        xp, v = x.split(self.num_distinct_actions, 1)
-        return F.softmax(xp, dim=1), torch.tanh(v)
+        x = x.view(-1, self.height * self.width * 50)
+
+        xv = F.leaky_relu(self.fc1v(x))
+        xp = F.leaky_relu(self.fc1p(x))
+        # x = F.leaky_relu(self.fc1_bn(self.fc1(x)))
+        # x = self.fc2(x)
+        # xp, v = x.split(self.num_distinct_actions, 1)
+        #return F.softmax(xp, dim=1), torch.tanh(v)
+        return F.softmax(self.fc2p(xp), dim=1), torch.tanh(self.fc2v(xv))
 
     def predict(self, state):
         """

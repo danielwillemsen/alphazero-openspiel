@@ -85,6 +85,7 @@ class MCTS:
         self.use_puct = bool(kwargs.get('use_puct', True))
         self.root = Node(None, 0.0)
         self.policy_fn = policy_fn
+        self.dirichlet = {}
 
     def playout(self, state):
         """
@@ -123,8 +124,31 @@ class MCTS:
         """
         visits = [self.root.children[i].N if i in self.root.children else 0 for i in range(self.num_distinct_actions)]
         return [float(visit) / sum(visits) for visit in visits]
+        #
+        # visits = [self.root.children[i].N if i in self.root.children else 0 for i in range(self.num_distinct_actions)]
+        # return [float(visit) / sum(visits) for visit in visits]
+        # visits = [self.root.children[i].N if i in self.root.children else 0 for i in range(self.num_distinct_actions)]
+        # visits = [float(visit) / sum(visits) for visit in visits]
+        # visits = [visit - self.dirichlet[i] if i in self.dirichlet and self.dirichlet[i] < visit else 0.0 for i, visit in enumerate(visits)]
+        # return [float(visit) / sum(visits) for visit in visits]
+
         # visits = [(self.root.children[i].Q+1.0)**4 if i in self.root.children and self.root.children[i].N > 0 else 0.0001 for i in range(self.num_distinct_actions)]
         # return [float(visit) / sum(visits) for visit in visits]
+    def get_target_probabilities(self):
+        """For now simply linear with the amount of visits.
+        @todo check how this is done in the alphaZero paper
+
+        @return:
+        """
+        # visits = [self.root.children[i].N if i in self.root.children else 0 for i in range(self.num_distinct_actions)]
+        # return [float(visit) / sum(visits) for visit in visits]
+        #
+        # visits = [self.root.children[i].N if i in self.root.children else 0 for i in range(self.num_distinct_actions)]
+        # return [float(visit) / sum(visits) for visit in visits]
+        visits = [self.root.children[i].N if i in self.root.children else 0 for i in range(self.num_distinct_actions)]
+        # visits = [float(visit) / sum(visits) for visit in visits]
+        # visits = [(visit - self.dirichlet[i])**0.9 if i in self.dirichlet and self.dirichlet[i] < visit else 0.00001 for i, visit in enumerate(visits)]
+        return [float(visit) / sum(visits) for visit in visits]
 
     def get_value_changes(self):
         """For now simply linear with the amount of visits.
@@ -152,8 +176,11 @@ class MCTS:
         if self.use_dirichlet:
             prior_ps = ((1.0-self.dirichlet_ratio) * np.array(prior_ps))
             dirichlet = list(np.random.dirichlet(0.3 * np.ones(len(legal_actions))))
+            self.dirichlet = {}
             for i, action in enumerate(legal_actions):
                 prior_ps[action] = prior_ps[action] + self.dirichlet_ratio*dirichlet[i]
+                self.dirichlet[action] = self.dirichlet_ratio*dirichlet[i]
+        self.root.value = -leaf_value
         self.root.expand(prior_ps, legal_actions)
 
     def update_root(self, action):

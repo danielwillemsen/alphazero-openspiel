@@ -57,17 +57,19 @@ class AlphaZeroBot(pyspiel.Bot):
             self.mcts = MCTS(self.policy_fn, self.num_distinct_actions, **self.kwargs)
 
         # Perform the MCTS
-        temp = 1.0
         normalized_visit_counts = np.array(self.mcts.search(state))
-        #if self.self_play:
-        #    value_probabilities = np.array(self.mcts.get_value_changes())
-        #    action_probabilities = 0.95 * action_probabilities + 0.05 * value_probabilities
-
-        # Remove illegal actions
         legal_actions = state.legal_actions(state.current_player())
-        normalized_visit_counts = remove_illegal_actions(normalized_visit_counts, legal_actions)
 
-        action_probabilities = normalized_visit_counts**(1./self.temperature)/sum(normalized_visit_counts**(1./self.temperature))
+        # if self.self_play:
+        #     value_probabilities = np.array(self.mcts.get_value_changes())
+        #     action_probabilities = 0.95 * normalized_visit_counts + 0.05 * value_probabilities
+        #     action_probabilities = remove_illegal_actions(action_probabilities, legal_actions)
+        # else:
+        action_probabilities = remove_illegal_actions(normalized_visit_counts, legal_actions)
+        # Remove illegal actions
+        targets = remove_illegal_actions(np.array(self.mcts.get_target_probabilities()), legal_actions)
+
+        action_probabilities = action_probabilities**(1./self.temperature)/sum(action_probabilities**(1./self.temperature))
         # Select the action, either probabilistically or simply the best.
         if self.use_random_actions and len(state.history()) < self.num_probabilistic_actions:
             action = np.random.choice(legal_actions)
@@ -79,7 +81,7 @@ class AlphaZeroBot(pyspiel.Bot):
         # This format is needed for the bot API
         policy = []
         for act in legal_actions:
-            policy.append((act, normalized_visit_counts[act]))
+            policy.append((act, targets[act]))
 
         return policy, action
 

@@ -1,11 +1,19 @@
-import torch
+import sys
 
+from game_utils import *
+import logging
+from train import Trainer
+from torch import multiprocessing
+import torch
+from examplegenerator import ExampleGenerator
+import copy
 from connect4net import Net
-from mctsagent import MCTSAgent
 
 if __name__ == '__main__':
-    net = Net()
-    net.load_state_dict(torch.load("models/example_model.pth", map_location='cpu'))
-    net.eval()
-    mctsagent = MCTSAgent(net.predict)
-    mctsagent.play_game_vs_human_net_only()
+    print(sys.path)
+    logger = logging.getLogger('alphazero')
+    multiprocessing.set_start_method('spawn')
+    trainer = Trainer()
+    trainer.current_net.load_state_dict(torch.load('../../meteor01/alphazero-connect4/models/soft-Z5.pth', map_location=trainer.device))
+
+    test_zero_vs_human(trainer.current_net.predict)

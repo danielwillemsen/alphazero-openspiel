@@ -14,18 +14,18 @@ if __name__ == '__main__':
     logger = logging.getLogger('alphazero')
     multiprocessing.set_start_method('spawn')
     trainer = Trainer()
-    trainer.current_net.load_state_dict(torch.load('./openspieltest200_connectfour_50_deeptd.pth', map_location=trainer.device))
+    trainer.current_net.load_state_dict(torch.load('./models/soft-Z-200.pth', map_location=trainer.device))
 
     net2 = Net(trainer.state_shape, trainer.num_distinct_actions, device=trainer.device)
-    net2.load_state_dict(torch.load('./openspieltest400_connectfour.pth', map_location=trainer.device))
+    net2.load_state_dict(torch.load('./models/off-policy400.pth', map_location=trainer.device))
     net2.eval()
 
     n_tests = 100
     logger.info("n_tests: " + str(n_tests))
 
     agents = []
-    agents.append(["AlphaZero net OLD", {"n_playouts": 100, "use_probabilistic_actions": True, "num_probabilistic_actions": 6, "c_puct":1.5}, trainer.current_net])
-    agents.append(["AlphaZero net NEW", {"n_playouts": 100, "use_probabilistic_actions": True, "num_probabilistic_actions": 6, "c_puct":1.5}, net2])
+    agents.append(["AlphaZero net OLD", {"n_playouts": 200, "use_probabilistic_actions": True, "num_probabilistic_actions": 6, "c_puct":1.5}, trainer.current_net])
+    agents.append(["AlphaZero net NEW", {"n_playouts": 200, "use_probabilistic_actions": True, "num_probabilistic_actions": 6, "c_puct":1.5}, net2])
 
     #agents.append(["AlphaZero 200 simulations", {"n_playouts": 200, "use_probabilistic_actions": True}])
     #agents.append(["AlphaZero 400 simulations", {"n_playouts": 400, "use_probabilistic_actions": True}])
