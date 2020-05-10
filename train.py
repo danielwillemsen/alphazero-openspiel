@@ -1,4 +1,3 @@
-import sys
 import pickle
 import time
 from datetime import datetime
@@ -11,7 +10,7 @@ from torch import multiprocessing
 from open_spiel.python.algorithms import mcts
 
 from alphazerobot import AlphaZeroBot, NeuralNetBot
-from connect4net import Net
+from network import Net
 from examplegenerator import ExampleGenerator
 from game_utils import *
 import logging
@@ -30,11 +29,13 @@ class Trainer:
         self.test_n_gens = 10                   # How many iterations until testing
         self.n_tests = 200                      # How many tests to perform for testing
         self.use_gpu = True                     # Use GPU (if available)
+        self.n_pools = 1                        # Amount of worker pools to create (also amount of GPU's to utilize)
+        self.n_processes = 1                    # Amount of game processes to start for every pool.
 
         # Algorithm Parameters
-        self.n_games_per_generation = 500        # How many games to generate per iteration
-        self.n_batches_per_generation = 500      # How batches of neural network training per iteration
-        self.n_games_buffer_max = 20000          # How many games to store in FIFO buffer, at most. Buffer is grown.
+        self.n_games_per_generation = 500       # How many games to generate per iteration
+        self.n_batches_per_generation = 500     # How batches of neural network training per iteration
+        self.n_games_buffer_max = 20000         # How many games to store in FIFO buffer, at most. Buffer is grown.
         self.batch_size = 256                   # Batch size for neural network training
         self.lr = 0.001                         # Learning rate for neural network
         self.n_games_buffer = 4 * self.n_games_per_generation
@@ -192,10 +193,15 @@ class Trainer:
         start = time.time()
 
         # Generate the examples
-        generator = ExampleGenerator(self.current_net, self.name_game,
-                                     self.device, n_playouts=self.n_playouts_train, temperature=self.temperature,
-                                     dirichlet_ratio=self.dirichlet_ratio, c_puct=self.uct_train,
-                                     backup=self.backup, tree_strap=self.tree_strap)
+        generator = ExampleGenerator(self.current_net, self.name_game, self.device,
+                                     n_playouts=self.n_playouts_train,
+                                     temperature=self.temperature,
+                                     dirichlet_ratio=self.dirichlet_ratio,
+                                     c_puct=self.uct_train,
+                                     backup=self.backup,
+                                     tree_strap=self.tree_strap,
+                                     n_pools=self.n_pools,
+                                     n_processes=self.n_processes)
         games = generator.generate_examples(n_games)
         self.games_played += self.n_games_per_generation
 
@@ -220,9 +226,14 @@ class Trainer:
         """
         start = time.time()
         logger.info("Testing...")
-        generator = ExampleGenerator(self.current_net, self.name_game,
-                                     self.device, is_test=True, temperature=self.temperature,
-                                     dirichlet_ratio=self.dirichlet_ratio, c_puct=self.uct_test)
+        generator = ExampleGenerator(self.current_net, self.name_game, self.device,
+                                     is_test=True,
+                                     temperature=self.temperature,
+                                     dirichlet_ratio=self.dirichlet_ratio,
+                                     c_puct=self.uct_test,
+                                     n_pools=self.n_pools,
+                                     n_processes=self.n_processes)
+
         self.test_data['games_played'].append(self.games_played)
 
         score_tot = 0.
@@ -266,18 +277,18 @@ class Trainer:
             self.train_network(self.n_batches_per_generation)           # Train network on games in the buffer
 
             # Perform testing periodically
-            if self.generation % self.test_n_gens == 0 or self.generation in [5, 10, 20, 30, 40, 50]:
+            if self.generation % self.test_n_gens == 0:                      # Test the alphaZero bot against MCTS bots
                 self.test_agent()
 
             # Periodically save network
-            if self.save and self.generation % self.save_n_gens == 0 or self.generation in [5, 10, 20, 30, 40, 50]:
+            if self.save and self.generation % self.save_n_gens == 0:
                 logger.info("Saving network")
                 torch.save(self.current_net.state_dict(), self.model_path + self.name_run + str(self.generation) + ".pth")
                 logger.info("Network saved")
 
     def update_buffer_size(self):
-        if self.generation % 1 == 0 and self.n_games_buffer < self.n_games_buffer_max:
-            self.n_games_buffer += 200 #self.n_games_per_generation / 5
+        if self.generation % 2 == 0 and self.n_games_buffer < self.n_games_buffer_max:
+            self.n_games_buffer += self.n_games_per_generation
         logger.info("Buffer size:" + str(self.n_games_buffer))
 
 if __name__ == '__main__':

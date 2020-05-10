@@ -8,7 +8,7 @@ from torch import multiprocessing
 import torch
 from examplegenerator import ExampleGenerator
 import copy
-from connect4net import Net
+from network import Net
 
 if __name__ == '__main__':
     logger = logging.getLogger('alphazero')

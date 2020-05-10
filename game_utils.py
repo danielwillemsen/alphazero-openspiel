@@ -1,13 +1,12 @@
 import numpy as np
 import pyspiel
 from open_spiel.python.algorithms import mcts
-from connect4net import state_to_board
+from network import state_to_board
 import copy
 from alphazerobot import AlphaZeroBot, NeuralNetBot
-from connect4net import Net
+from network import Net
 from alphazerobot import remove_illegal_actions
-# from open_spiel.python.bots import human
-#
+
 class HumanBot():
     def step(self, state):
         print(state)
