@@ -8,7 +8,7 @@ import numpy as np
 import math
 
 class Node:
-    """MTCS Node
+    """MTCS Node containing prior policy, Q-value and visit count.
     """
 
     def __init__(self, parent, prior_p, use_puct=True):
@@ -17,22 +17,34 @@ class Node:
         self.P = prior_p
         self.Q = 0
         self.N = 0
-        self.V = 0
-        self.value = 0
         self.use_puct = use_puct
 
     def is_leaf(self):
+        """ Check if this node is a leaf
+
+        Returns: Boolean whether node is leaf or not
+
+        """
         return self.children == {}
 
     def is_root(self):
+        """ Check whether this node is a root node
+
+        Returns: Boolean whether node is root or not
+
+        """
         return self.parent is None
 
-    def select(self, c_puct, legal_actions):
+    def select(self, c_puct):
         """Select the child with highest values (non-noisy at this moment)
 
-        @param c_puct: (float) coefficient for exploration.
-        @param legal_actions: (list) of all legal actions
-        @return:
+        Args:
+            c_puct: (float) coefficient for exploration.
+
+        Returns:
+            child: selected child node
+            action: action associated with child node
+
         """
         value_list = {action: child.get_value(c_puct) for action, child in self.children.items()}
         action = max(value_list, key=value_list.get)
@@ -42,8 +54,10 @@ class Node:
     def expand(self, prior_ps, legal_actions):
         """Expand this node
 
-        @param prior_ps: list of prior probabilities (currently only from neural net. In future also from simulation)
-        @return:
+        Args:
+            prior_ps: list of prior probabilities (currently only from neural net. In future also from simulation)
+            legal_actions: list of legal actions
+
         """
         for action in legal_actions:
             if action not in self.children:
@@ -52,10 +66,13 @@ class Node:
                 self.children[action].P = prior_ps[action]
 
     def get_value(self, c_puct):
-        """Calculates the value of the node
+        """Calculates the value of the node according to PUCT or another modified UCT
 
-        @param c_puct: (float) coefficient for exploration.
-        @return: Q plus bonus value (for exploration)
+        Args:
+            c_puct: (float) coefficient for exploration.
+
+        Returns: float of the value
+
         """
         if self.use_puct:
             return self.Q + c_puct * self.P * math.sqrt(self.parent.N) / (self.N+1)
@@ -76,22 +93,43 @@ class MCTS:
     """Main Monte-Carlo tree class. Should be kept during the whole game.
     """
 
-    def __init__(self, policy_fn, num_distinct_actions, **kwargs):
+    def __init__(self, policy_fn, num_distinct_actions,
+                 c_puct=2.5,
+                 n_playouts=100,
+                 use_dirichlet=True,
+                 dirichlet_ratio=0.25,
+                 use_puct=True):
+        """Initializes the MCTS search tree
+
+        Args:
+            policy_fn: function that is used to get the value and prior policy estimate.
+            num_distinct_actions: Amount of distinct actions for this game
+
+        Keyword Args:
+            c_puct: exploration coefficient for the search
+            n_playouts: number of simulations to do for a single MCTS search
+            use_dirichlet: whether to add dirichlet noise to root nodes
+            use_puct: use alphaZero style PUCT or use a different UCT formula.
+
+        """
         self.num_distinct_actions = num_distinct_actions
-        self.c_puct = float(kwargs.get('c_puct', 2.5))
-        self.dirichlet_ratio = float(kwargs.get('dirichlet_ratio', 0.25))
-        self.n_playouts = int(kwargs.get('n_playouts', 100))
-        self.use_dirichlet = bool(kwargs.get('use_dirichlet', True))
-        self.use_puct = bool(kwargs.get('use_puct', True))
+        self.c_puct = c_puct
+        self.n_playouts = n_playouts
+        self.use_dirichlet = use_dirichlet
+        self.use_puct = use_puct
+        self.dirichlet_ratio = dirichlet_raio
         self.root = Node(None, 0.0)
         self.policy_fn = policy_fn
         self.dirichlet = {}
 
     def playout(self, state):
-        """
+        """Do a single MCTS simulation
 
-        @param state: Should be a copy of the state as it is modified in place.
-        @return:
+        Performs the four steps of MCTS once: selection, expansion, simulation and backpropagation.
+
+        Args:
+            state: current root state. Should be a copy as it is modified in-place
+
         """
         node = self.root
 
@@ -99,10 +137,10 @@ class MCTS:
         current_player = state.current_player()
         while not node.is_leaf() and not state.is_terminal():
             current_player = state.current_player()
-            node, action = node.select(self.c_puct, state.legal_actions(current_player))
+            node, action = node.select(self.c_puct)
             state.apply_action(action)
 
-        # Expansion
+        # Expansion & "Simulation (policy-value function evaluation)"
         if not state.is_terminal():
             prior_ps, leaf_value = self.policy_fn(state)
             node.expand(prior_ps, state.legal_actions(state.current_player()))
@@ -110,42 +148,27 @@ class MCTS:
             leaf_value = -state.player_return(current_player)
 
         # Back propagation
-        # @todo check if this minus sign here makes sense
-        node.value = -leaf_value
-        node.V = -leaf_value
         node.update_recursive(-leaf_value)
         return
 
-    def get_action_probabilities(self):
-        """For now simply linear with the amount of visits.
-        @todo check how this is done in the alphaZero paper
+    def get_normalized_visit_counts(self):
+        """Get the normalized visit counts of the root node of this MCTS tree
 
-        @return:
+        Returns: list of normalized visit counts
+
         """
         visits = [self.root.children[i].N if i in self.root.children else 0 for i in range(self.num_distinct_actions)]
         return [float(visit) / sum(visits) for visit in visits]
-
-    def get_target_probabilities(self):
-        """For now simply linear with the amount of visits.
-        @todo check how this is done in the alphaZero paper
-
-        @return:
-        """
-
-        visits = [self.root.children[i].N if i in self.root.children else 0 for i in range(self.num_distinct_actions)]
-        return [float(visit) / sum(visits) for visit in visits]
-
-    def get_value_changes(self):
-        """For now simply linear with the amount of visits.
-        @todo check how this is done in the alphaZero paper
-
-        @return:
-        """
-        changes = [max(0.0, self.root.children[i].value - self.root.children[i].Q)+0.0001 if i in self.root.children else 0.0 for i in range(self.num_distinct_actions)]
-        return [float(change) for change in changes]
-
 
     def search(self, state):
+        """Do a full MCTS search for the given state
+
+        Args:
+            state: current state for which the MCTS search needs to be performed
+
+        Returns: list of normalized visit counts. Can be interpreted as action probabilities.
+
+        """
         # Expand the root with dirichlet noise if this is the first move of the game
         if self.use_dirichlet:
             self.expand_root_dirichlet(state)
@@ -153,7 +176,7 @@ class MCTS:
         for i in range(self.n_playouts):
             state_copy = state.clone()
             self.playout(state_copy)
-        return self.get_action_probabilities()
+        return self.get_normalized_visit_counts()
 
     def expand_root_dirichlet(self, state):
         prior_ps, leaf_value = self.policy_fn(state)
@@ -161,17 +184,15 @@ class MCTS:
         if self.use_dirichlet:
             prior_ps = ((1.0-self.dirichlet_ratio) * np.array(prior_ps))
             dirichlet = list(np.random.dirichlet(0.3 * np.ones(len(legal_actions))))
-            self.dirichlet = {}
             for i, action in enumerate(legal_actions):
-                prior_ps[action] = prior_ps[action] + self.dirichlet_ratio*dirichlet[i]
-                self.dirichlet[action] = self.dirichlet_ratio*dirichlet[i]
-        self.root.value = -leaf_value
+                prior_ps[action] = prior_ps[action] + 0.25*dirichlet[i]
         self.root.expand(prior_ps, legal_actions)
 
     def update_root(self, action):
         """Updates root when new move has been performed.
 
-        @param action: (int) action taht
+        Args:
+            action: (int) action that should be performed to update the root
         @return:
         """
         if self.root.is_leaf():
@@ -181,6 +202,16 @@ class MCTS:
             self.root.parent = None
 
     def random_rollout(self, state):
+        """Perform a random rollout as an alternative to a policy-value function
+
+        Args:
+            state: state from which to run the rollout
+
+        Returns:
+            prios_ps: a uniform prior policy
+            leaf_value: value from the random rollout
+
+        """
         working_state = state.clone()
         starting_player = working_state.current_player()
         while not working_state.is_terminal():

@@ -57,8 +57,7 @@ class Trainer:
         self.game = pyspiel.load_game(self.name_game)
         self.games_played = 0
         self.start_time = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-        self.test_data = {'games_played': [], 'zero_vs_random': [], 'zero_vs_mcts100': [], 'zero_vs_mcts200': [],
-                          'net_vs_random': [], 'net_vs_mcts100': [], 'net_vs_mcts200': []}
+
         # Initialize logger
         formatter = logging.Formatter('%(asctime)s %(message)s')
         logger.setLevel('DEBUG')
@@ -73,6 +72,7 @@ class Trainer:
         logger.info('Logger started')
         logger.info(str(torch.cuda.is_available()))
         logger.info(str(backup))
+
         # Setup CUDA if possible
         if self.use_gpu:
             if not torch.cuda.is_available():
@@ -88,14 +88,19 @@ class Trainer:
         self.criterion_value = nn.MSELoss()
         self.current_net.eval()
 
-
+        # Log the settings.
         logger.info(self.__dict__)
         logger.info("Using:" + str(self.device))
 
     def net_step(self, flattened_buffer):
-        """Samples a random batch and updates the NN parameters with this bat
+        """ Samples a random batch and updates the NN parameters with this batch
 
-        @return:
+        Args:
+            flattened_buffer: a flat buffer with examples from which to sample from
+
+        Returns:
+            loss_p: loss of the policy criterion
+            loss_v: loss of the value criterion
         """
         self.current_net.zero_grad()
 
@@ -124,10 +129,10 @@ class Trainer:
         self.it += 1
         return loss_p, loss_v
 
-    def train_network(self, n_batches):
-        """Trains the neural network for batches_per_generation batches
+    def train_network(self):
+        """Trains the neural network for batches_per_generation batches.
 
-        @return:
+
         """
         logger.info("Training Network")
         self.current_net.train()
@@ -136,7 +141,7 @@ class Trainer:
         loss_tot_v = 0
         loss_tot_p = 0
 
-        for i in range(n_batches):
+        for i in range(self.n_batches_per_generation):
             loss_p, loss_v = self.net_step(flattened_buffer)
             loss_tot_p += loss_p
             v = loss_v
@@ -148,10 +153,21 @@ class Trainer:
                 loss_tot_p = 0
         self.current_net.eval()
 
-    def remove_duplicates(self, flattened_buffer):
+    @staticmethod
+    def remove_duplicates(flattened_buffer):
+        """Removes duplicates from a flattened buffer by averaging values and policy.
+
+        Args:
+            flattened_buffer: flat buffer with examples from where the duplicates need to be removed.
+
+        Returns: flat buffer with duplicates removed.
+
+        """
+
         logger.info("Removing duplciates")
         logger.info("Initial amount of samples: " + str(len(flattened_buffer)))
         start = time.time()
+
         # Remove duplicates
         flattened_buffer_dict = dict()
         flattened_buffer_counts = dict()
@@ -187,7 +203,8 @@ class Trainer:
     def generate_examples(self, n_games):
         """Generates new games in a multithreaded way.
 
-        @param n_games: amount of games to generate
+        Arg:
+            n_games: amount of games to generate
         """
         logger.info("Generating Data")
         start = time.time()
@@ -221,8 +238,6 @@ class Trainer:
     def test_agent(self):
         """Tests the current agent
         Tests against random opponents and pure MCTS agents
-
-        @return: None
         """
         start = time.time()
         logger.info("Testing...")
@@ -242,29 +257,22 @@ class Trainer:
             score_tot += score1
             score_tot += score2
         avg = score_tot / (2 * self.n_tests)
-        self.test_data['net_vs_random'].append(avg)
         logger.info("Average score vs random (net only):" + str(avg))
 
         avg = generator.generate_tests(self.n_tests, test_net_vs_mcts, 100)
-        self.test_data['net_vs_mcts100'].append(avg)
         logger.info("Average score vs mcts100 (net only):" + str(avg))
 
         avg = generator.generate_tests(self.n_tests, test_zero_vs_mcts, 200)
-        self.test_data['zero_vs_mcts200'].append(avg)
         logger.info("Average score vs mcts200:" + str(avg))
 
         avg = generator.generate_tests(self.n_tests, test_net_vs_mcts, 200)
-        self.test_data['net_vs_mcts200'].append(avg)
         logger.info("Average score vs mcts200 (net only):" + str(avg))
 
-        with open("logs/" + self.start_time + str(self.name_run) + ".p", 'wb') as f:
-            pickle.dump(self.test_data, f)
         logger.info("Testing took: " + str(time.time() - start) + "seconds")
         return
 
     def run(self):
         """Main alphaZero training loop
-        @return:
         """
 
         # Start with testing the agent
@@ -273,8 +281,8 @@ class Trainer:
         while self.generation < 201:
             self.generation += 1
             logger.info("Generation:" + str(self.generation))
-            self.generate_examples(self.n_games_per_generation)         # Generate new games through self-play
-            self.train_network(self.n_batches_per_generation)           # Train network on games in the buffer
+            self.generate_examples(self.n_games_per_generation)     # Generate new games through self-play
+            self.train_network()                                    # Train network on games in the buffer
 
             # Perform testing periodically
             if self.generation % self.test_n_gens == 0:                      # Test the alphaZero bot against MCTS bots

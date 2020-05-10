@@ -39,6 +39,16 @@ class AlphaZeroBot(pyspiel.Bot):
         self.keep_search_tree = keep_search_tree
 
     def step(self, state):
+        """ Bot takes a step by running MCTS and selecting a move
+
+        Args:
+            state: current game state
+
+        Returns:
+            policy: list of actions and corresponding probabilities
+            action: real action that should be performed
+
+        """
         # Defaults to keep the tree during a game
         if self.keep_search_tree:
             action_history = state.history()
@@ -83,7 +93,7 @@ class AlphaZeroBot(pyspiel.Bot):
 
 
 class NeuralNetBot(pyspiel.Bot):
-    """Bot which uses a combination of MCTS and a policy value net to calculate a move.
+    """ Bot which uses a Neural Network to come up with a move.
 
     """
 
