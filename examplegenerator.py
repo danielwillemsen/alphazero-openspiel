@@ -17,8 +17,6 @@ logger = logging.getLogger('alphazero')
 def generate_single_game(tup):
     conn, game_name, kwargs, _, _, _ = tup
     game = pyspiel.load_game(game_name)
-    # niceness = os.nice(0)
-    # os.nice(5-niceness)
     evaluator = Evaluator(conn, game)
     example = play_game_self(evaluator.evaluate_nn, game_name, **kwargs)
     return example
@@ -28,10 +26,7 @@ def test_single_game(tup):
     conn, game_name, kwargs, game_fn, conn2, _ = tup
     n_playouts_mcts = tup[5][0]
     game = pyspiel.load_game(game_name)
-    # niceness = os.nice(0)
-    # os.nice(5-niceness)
     evaluator = Evaluator(conn, game)
-    generate_statistics = bool(kwargs.get("generate_statistics", False))
     if conn2:
         evaluator2 = Evaluator(conn2, game)
         score1, score2, statistics = game_fn(evaluator.evaluate_nn, n_playouts_mcts, game_name, policy_fn2=evaluator2.evaluate_nn, **kwargs)
@@ -120,7 +115,7 @@ class ExampleGenerator:
                 parent_conn2, child_conn2 = multiprocessing.Pipe()
                 parent_conns2.append(parent_conn2)
                 child_conns2.append(child_conn2)
-        pool = multiprocessing.Pool(processes=50, initializer=np.random.seed)
+        pool = multiprocessing.Pool(processes=1, initializer=np.random.seed)
         gpu_handler = multiprocessing.Process(target=handle_gpu, args=(copy.deepcopy(self.net), parent_conns, device))
         gpu_handler2 = None
         if self.net2:
@@ -141,7 +136,7 @@ class ExampleGenerator:
         return [gpu_handler, pool, examples, child_conns, parent_conns, gpu_handler2, child_conns2, parent_conns2]
 
     def run_games(self, n_games, game_fn, *args):
-        n_pools = 4
+        n_pools = 1
         pools = []
         examples = []
         device_no = 1

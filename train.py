@@ -1,6 +1,4 @@
 import sys
-# sys.path.append("/export/scratch1/home/jdw/alphazero/open_spiel")
-# sys.path.append("/export/scratch1/home/jdw/alphazero/open_spiel/build/python")
 import pickle
 import time
 from datetime import datetime
@@ -29,17 +27,17 @@ class Trainer:
         self.model_path = "models/"             # Path to save the models
         self.save = True                        # Save neural network
         self.save_n_gens = 10                   # How many iterations until network save
-        self.test_n_gens = 20                   # How many iterations until testing
+        self.test_n_gens = 10                   # How many iterations until testing
         self.n_tests = 200                      # How many tests to perform for testing
         self.use_gpu = True                     # Use GPU (if available)
 
         # Algorithm Parameters
         self.n_games_per_generation = 500        # How many games to generate per iteration
-        self.n_batches_per_generation = 400      # How batches of neural network training per iteration
-        self.n_games_buffer_max = 999999          # How many games to store in FIFO buffer, at most. Buffer is grown.
-        self.batch_size = 1024                   # Batch size for neural network training
-        self.lr = 0.0005                         # Learning rate for neural network
-        self.n_games_buffer = 2 * self.n_games_per_generation
+        self.n_batches_per_generation = 500      # How batches of neural network training per iteration
+        self.n_games_buffer_max = 20000          # How many games to store in FIFO buffer, at most. Buffer is grown.
+        self.batch_size = 256                   # Batch size for neural network training
+        self.lr = 0.001                         # Learning rate for neural network
+        self.n_games_buffer = 4 * self.n_games_per_generation
         self.temperature = 1.0
         self.dirichlet_ratio = 0.25
         self.uct_train = 2.5
@@ -48,6 +46,7 @@ class Trainer:
         self.backup = backup
         self.tree_strap = False
         self.it = 0
+
         # Initialization of the trainer
         self.generation = 0
         self.game = pyspiel.load_game(self.name_game)
@@ -60,19 +59,19 @@ class Trainer:
         self.test_data = {'games_played': [], 'zero_vs_random': [], 'zero_vs_mcts100': [], 'zero_vs_mcts200': [],
                           'net_vs_random': [], 'net_vs_mcts100': [], 'net_vs_mcts200': []}
         # Initialize logger
-        # formatter = logging.Formatter('%(asctime)s %(message)s')
-        # logger.setLevel('DEBUG')
-        # fh = logging.FileHandler("logs/" + str(self.start_time) + str(self.name_run) + ".log")
-        # fh.setFormatter(formatter)
-        # fh.setLevel('INFO')
-        # ch = logging.StreamHandler()
-        # ch.setLevel('INFO')
-        # ch.setFormatter(formatter)
-        # logger.addHandler(ch)
-        # logger.addHandler(fh)
-        # logger.info('Logger started')
-        # logger.info(str(torch.cuda.is_available()))
-        # logger.info(str(backup))
+        formatter = logging.Formatter('%(asctime)s %(message)s')
+        logger.setLevel('DEBUG')
+        fh = logging.FileHandler("logs/" + str(self.start_time) + str(self.name_run) + ".log")
+        fh.setFormatter(formatter)
+        fh.setLevel('INFO')
+        ch = logging.StreamHandler()
+        ch.setLevel('INFO')
+        ch.setFormatter(formatter)
+        logger.addHandler(ch)
+        logger.addHandler(fh)
+        logger.info('Logger started')
+        logger.info(str(torch.cuda.is_available()))
+        logger.info(str(backup))
         # Setup CUDA if possible
         if self.use_gpu:
             if not torch.cuda.is_available():
@@ -83,7 +82,7 @@ class Trainer:
         # Initialize neural net
         self.current_net = Net(self.state_shape, self.num_distinct_actions, device=self.device)
         self.current_net.to(self.device)
-        self.optimizer = torch.optim.Adam(self.current_net.parameters(), lr=self.lr, weight_decay=0.0005)
+        self.optimizer = torch.optim.Adam(self.current_net.parameters(), lr=self.lr, weight_decay=0.0001)
         self.criterion_policy = nn.BCELoss()
         self.criterion_value = nn.MSELoss()
         self.current_net.eval()
@@ -106,8 +105,8 @@ class Trainer:
         v_r = [flattened_buffer[i][3] for i in sample_ids]
 
         x = torch.from_numpy(np.array(x)).float().to(self.device)
-        # Pass through network
 
+        # Pass through network
         p_t, v_t = self.current_net(x)
         p_r = [item if item else p_t[i,:].to("cpu").tolist() for i, item in enumerate(p_r)]
 
@@ -118,76 +117,11 @@ class Trainer:
         # Backward pass
         loss_v = self.criterion_value(v_t, v_r.unsqueeze(1))
         loss_p = -torch.sum(p_r * torch.log(p_t)) / p_r.size()[0]
-
-        # if self.tree_strap:
-        #     x_v = [item[1] for i in sample_ids for item in flattened_buffer[i][4]]
-        #     v_r_v = [item[3] for i in sample_ids for item in flattened_buffer[i][4]]
-        #     # p_r_v = [item[2] for i in sample_ids for item in flattened_buffer[i][4]]
-        #     if len(x_v) > 0:
-        #         x_v = torch.from_numpy(np.array(x_v)).float().to(self.device)
-        #         v_r_v = torch.tensor(np.array(v_r_v)).float().to(self.device)
-        #         # p_r_v = torch.tensor(np.array(p_r_v)).float().to(self.device)
-        #
-        #         p_t_v, v_t_v = self.current_net(x_v)
-        #         loss_v_tree = self.criterion_value(v_t_v, v_r_v.unsqueeze(1))
-        #         # loss_p_tree =-torch.sum(p_r_v * torch.log(p_t_v)) / p_r_v.size()[0]
-        #         loss_v = 0.5*loss_v + 0.5*loss_v_tree
-        #         # loss_p = 0.5*loss_p + 0.5*loss_p_tree
-
-        # loss_p = self.criterion_policy(p_t, p_r)
         loss = loss_v + loss_p
         loss.backward()
         self.optimizer.step()
-        # if self.it %500 == 0:
-        #     print(torch.mean(torch.abs(v_r)))
-        #     print(torch.mean(torch.abs(v_t)))
-        #
-        #     print(v_r)
         self.it += 1
         return loss_p, loss_v
-
-    # def net_step(self, flattened_buffer):
-    #     """Samples a random batch and updates the NN parameters with this bat
-    #
-    #     @return:
-    #     """
-    #     self.current_net.zero_grad()
-    #
-    #     # Select samples and format them to use as batch
-    #     sample_ids = np.random.randint(len(flattened_buffer), size=self.batch_size)
-    #     x = [flattened_buffer[i][1] for i in sample_ids]
-    #     p_r = [flattened_buffer[i][2] for i in sample_ids]
-    #     v_r = [flattened_buffer[i][3] for i in sample_ids]
-    #
-    #     x_v = [item[1] for i in sample_ids for item in flattened_buffer[i][4]]
-    #     v_r_v = [item[3] for i in sample_ids for item in flattened_buffer[i][4]]
-    #
-    #     x = torch.from_numpy(np.array(x)).float().to(self.device)
-    #     p_r = torch.tensor(np.array(p_r)).float().to(self.device)
-    #     v_r = torch.tensor(np.array(v_r)).float().to(self.device)
-    #
-    #     if len(x_v) > 0:
-    #         x_v = torch.from_numpy(np.array(x_v)).float().to(self.device)
-    #         v_r_v = torch.tensor(np.array(v_r_v)).float().to(self.device)
-    #         _, v_t_v = self.current_net(x_v)
-    #
-    #     # Pass through network
-    #     p_t, v_t = self.current_net(x)
-    #
-    #     # Backward pass
-    #     if len(x_v) > 0:
-    #         #print(len(x_v))
-    #         loss_v = self.criterion_value(v_t, v_r.unsqueeze(1)) + self.criterion_value(v_t_v, v_r_v.unsqueeze(1))
-    #     else:
-    #         loss_v = self.criterion_value(v_t, v_r.unsqueeze(1))
-    #
-    #     loss_p = -torch.sum(p_r * torch.log(p_t)) / p_r.size()[0]
-    #
-    #     # loss_p = self.criterion_policy(p_t, p_r)
-    #     loss = loss_v + loss_p
-    #     loss.backward()
-    #     self.optimizer.step()
-    #     return loss_p, loss_v
 
     def train_network(self, n_batches):
         """Trains the neural network for batches_per_generation batches
@@ -233,8 +167,6 @@ class Trainer:
 
                 # Average value
                 flattened_buffer_dict[item[0]][3] += item[3]
-                # if self.tree_strap:
-                #     flattened_buffer_dict[item[0]][4] = item[4]
                 flattened_buffer_counts[item[0]] += 1
 
             else:
@@ -257,15 +189,6 @@ class Trainer:
         @param n_games: amount of games to generate
         """
         logger.info("Generating Data")
-        # Generate new training samples
-        # start = time.time()
-        # for i in range(n_games):
-        #     logger.info("Game " + str(i) + " / " + str(n_games))
-        #     examples = play_game_self(self.current_net.predict, self.name_game)
-        #     self.buffer.append(examples)
-        # logger.info("Finished Generating Data (normal)")
-        # logger.info(time.time()-start)
-
         start = time.time()
 
         # Generate the examples
@@ -277,12 +200,12 @@ class Trainer:
         self.games_played += self.n_games_per_generation
 
         # Add examples to buffer
-
         for examples in games:
             self.buffer.append(examples)
         logger.info("Finished Generating Data (threaded). Took: " + str(time.time() - start) + " seconds")
         logger.info("Total amount of games played:" + str(self.generation*self.n_games_per_generation))
         self.update_buffer_size()
+
         # Remove oldest entries from buffer if too long
         if len(self.buffer) > self.n_games_buffer:
             logger.info("Buffer full. Deleting oldest samples.")
@@ -301,14 +224,7 @@ class Trainer:
                                      self.device, is_test=True, temperature=self.temperature,
                                      dirichlet_ratio=self.dirichlet_ratio, c_puct=self.uct_test)
         self.test_data['games_played'].append(self.games_played)
-        # score_tot = 0.
-        # for i in range(self.n_tests):
-        #     score1, score2 = test_zero_vs_random(self.current_net.predict, self.game_name)
-        #     score_tot += score1
-        #     score_tot += score2
-        # avg = score_tot / (2 * self.n_tests)
-        # self.test_data['zero_vs_random'].append(avg)
-        # logger.info("Average score vs random:" + str(avg))
+
         score_tot = 0.
         for i in range(self.n_tests):
             score1, score2 = test_net_vs_random(self.current_net.predict, self.name_game)
@@ -317,14 +233,6 @@ class Trainer:
         avg = score_tot / (2 * self.n_tests)
         self.test_data['net_vs_random'].append(avg)
         logger.info("Average score vs random (net only):" + str(avg))
-        # score_tot = 0.
-        # for i in range(self.n_tests):
-        #     score1, score2 = test_zero_vs_mcts(self.current_net.predict, 100, self.name_game)
-        #     score_tot += score1
-        #     score_tot += score2
-        # avg = score_tot / (2 * self.n_tests)
-        # self.test_data['zero_vs_mcts100'].append(avg)
-        # logger.info("Average score vs mcts100:" + str(avg))
 
         avg = generator.generate_tests(self.n_tests, test_net_vs_mcts, 100)
         self.test_data['net_vs_mcts100'].append(avg)
@@ -338,14 +246,6 @@ class Trainer:
         self.test_data['net_vs_mcts200'].append(avg)
         logger.info("Average score vs mcts200 (net only):" + str(avg))
 
-        avg = generator.generate_tests(self.n_tests, test_zero_vs_mcts, 5000)
-        #self.test_data['zero_vs_mcts2000'].append(avg)
-        logger.info("Average score vs mcts5000:" + str(avg))
-
-        avg = generator.generate_tests(self.n_tests, test_net_vs_mcts, 5000)
-        #self.test_data['net_vs_mcts2000'].append(avg)
-        logger.info("Average score vs mcts5000 (net only):" + str(avg))
-
         with open("logs/" + self.start_time + str(self.name_run) + ".p", 'wb') as f:
             pickle.dump(self.test_data, f)
         logger.info("Testing took: " + str(time.time() - start) + "seconds")
@@ -356,7 +256,7 @@ class Trainer:
         @return:
         """
 
-        #self.test_agent()         # Start with testing the agent
+        # Start with testing the agent
         self.test_agent()
 
         while self.generation < 201:
@@ -368,7 +268,6 @@ class Trainer:
             # Perform testing periodically
             if self.generation % self.test_n_gens == 0 or self.generation in [5, 10, 20, 30, 40, 50]:
                 self.test_agent()
-                #self.test_agent()
 
             # Periodically save network
             if self.save and self.generation % self.save_n_gens == 0 or self.generation in [5, 10, 20, 30, 40, 50]:
@@ -385,192 +284,30 @@ if __name__ == '__main__':
     logger = logging.getLogger('alphazero')
     multiprocessing.set_start_method('spawn')
 
-
-
-    # for dirichlet_ratio in [0.15,0.25,0.35]:
-    #     backup_name = "on-policy"
-    #     trainer = Trainer(name=str(backup_name) + "dirichlet_ratio" + str(dirichlet_ratio), backup=backup_name)
-    #     trainer.dirichlet_ratio = dirichlet_ratio
-    #     trainer.run()
-
-    # for temperature in [0.75,1.0,1.5,2.0]:
-    #     backup_name = "on-policy"
-    #     trainer = Trainer(name=str(backup_name) + "temperature" + str(temperature), backup=backup_name)
-    #     trainer.temperature = temperature
-    #     trainer.run()
-
-    # for uct in [1.5, 2.0, 2.5, 3.0, 3.5]:
-    #     backup_name = "on-policy"
-    #     trainer = Trainer(name=str(backup_name) + "uct" + str(uct), backup=backup_name)
-    #     trainer.uct_train = uct
-    #     trainer.run()
-
-    # backup_name = "off-policy-lambda-2"
-    # trainer = Trainer(name=backup_name, backup=backup_name)
-    # # trainer.tree_strap = True
-    # trainer.run()
-    #
-    # # backup_name = "off-policy-lambda-0.75"
-    # # trainer = Trainer(name=backup_name, backup=backup_name)
-    # # # trainer.tree_strap = True
-    # # trainer.run()
-    # #
-    # # backup_name = "off-policy-lambda-0.5"
-    # # trainer = Trainer(name=backup_name, backup=backup_name)
-    # # # trainer.tree_strap = True
-    # # trainer.run()
-    # #
-    # # backup_name = "soft-Z-hybrid-MC"
-    # # trainer = Trainer(name=backup_name, backup=backup_name)
-    # # # trainer.tree_strap = True
-    # # trainer.run()
-    # #
-    # # backup_name = "soft-Z-hybrid-2"
-    # # trainer = Trainer(name=backup_name, backup=backup_name)
-    # # # trainer.tree_strap = True
-    # # trainer.run()
-    # # backup_name = "A0C"
-    # # trainer = Trainer(name=backup_name, backup=backup_name)
-    # # trainer.run()
-    # #
-    # backup_name = "soft-Z"
-    # trainer = Trainer(name=backup_name,backup=backup_name)
-    # #trainer.tree_strap = True
-    # trainer.run()
-    # temp_list = [0.5, 0.75, 1.0, 1.5, 2.0]
-    # backup_name = "on-policy"
-    # for temp in temp_list:
-    #     trainer = Trainer(name=backup_name+str(temp),backup=backup_name)
-    #     trainer.temperature = temp
-    #     trainer.tree_strap = False
-    #     trainer.run()
-    # backup_name = "off-policy-lambda-0.75"
-    # trainer = Trainer(name=backup_name,backup=backup_name)
-    # trainer.tree_strap = False
-    # trainer.run()
-    #
-    #tempvary
-    # temperatures = [0.5, .75, 1.0, 1.5]
-    # c_ucts = [1.5, 2.5, 3.5]
-    # f_dirichlets = [0.1, 0.25, 0.5]
-    # for backup_name in ["on-policy", "soft-Z", "A0C", "off-policy"]:
-    #     for temperature in temperatures:
-    #         trainer = Trainer(name=backup_name + "temp" + str(temperature), backup=backup_name)
-    #         trainer.temperature = temperature
-    #         trainer.tree_strap = False
-    #         trainer.run()
-    #
-    #     for c_uct in c_ucts:
-    #         trainer = Trainer(name=backup_name + "uct" + str(c_uct), backup=backup_name)
-    #         trainer.uct_train = c_uct
-    #         trainer.tree_strap = False
-    #         trainer.run()
-    #
-    #     for f_dirichlet in f_dirichlets:
-    #         trainer = Trainer(name=backup_name + "dir" +str(f_dirichlet), backup=backup_name)
-    #         trainer.dirichlet_ratio = f_dirichlet
-    #         trainer.tree_strap = False
-    #         trainer.run()
     backup_name = "on-policy"
     trainer = Trainer(name=backup_name,backup=backup_name)
-    trainer.tree_strap = False
-    trainer.temperature = 0.5
-    trainer.uct_train = 1.5
-    trainer.dirichlet_ratio = 0.1
+    trainer.temperature = 1.0
+    trainer.uct_train = 2.5
+    trainer.dirichlet_ratio = 0.25
     trainer.run()
 
     backup_name = "soft-Z"
     trainer = Trainer(name=backup_name,backup=backup_name)
-    trainer.tree_strap = False
-    trainer.temperature = 0.5
-    trainer.uct_train = 1.5
-    trainer.dirichlet_ratio = 0.1
+    trainer.temperature = 1.0
+    trainer.uct_train = 2.5
+    trainer.dirichlet_ratio = 0.25
     trainer.run()
 
     backup_name = "A0C"
     trainer = Trainer(name=backup_name,backup=backup_name)
-    trainer.tree_strap = False
-    trainer.temperature = 0.5
-    trainer.uct_train = 1.5
+    trainer.temperature = 1.0
+    trainer.uct_train = 2.5
     trainer.dirichlet_ratio = 0.25
     trainer.run()
 
     backup_name = "off-policy"
     trainer = Trainer(name=backup_name,backup=backup_name)
-    trainer.tree_strap = False
-    trainer.temp = 0.75
-    trainer.uct_train = 1.5
-    trainer.dirichlet_ratio = 0.1
+    trainer.temperature = 1.0
+    trainer.uct_train = 2.5
+    trainer.dirichlet_ratio = 0.25
     trainer.run()
-    #
-    # backup_name = "off-policy"
-    # trainer = Trainer(name=backup_name,backup=backup_name+"-tree_strap")
-    # trainer.tree_strap = True
-    # trainer.run()
-
-    # backup_name = "off-policy-lambda-0.75"
-    # trainer = Trainer(name=backup_name+"tree_strap",backup=backup_name)
-    # trainer.tree_strap = True
-    # trainer.run()
-    #
-    # backup_name = "on-policy"
-    # trainer = Trainer(name=backup_name,backup=backup_name)
-    # trainer.tree_strap = False
-    # trainer.run()
-
-    # backup_name = "off-policy"
-    # for temp in temp_list:
-    #     trainer = Trainer(name=backup_name+str(temp),backup=backup_name)
-    #     trainer.temperature = temp
-    #     trainer.tree_strap = False
-    #     trainer.run()
-    #
-    # backup_name = "soft-Z"
-    # for temp in temp_list:
-    #     trainer = Trainer(name=backup_name+str(temp),backup=backup_name)
-    #     trainer.temperature = temp
-    #     trainer.tree_strap = False
-    #     trainer.run()
-    #
-    # backup_name = "A0C"
-    # for temp in temp_list:
-    #     trainer = Trainer(name=backup_name+str(temp),backup=backup_name)
-    #     trainer.temperature = temp
-    #     trainer.tree_strap = False
-    #     trainer.run()
-    #
-
-
-
-
-
-    #
-    # # backup_name = "on-policy"
-    # # trainer = Trainer(name=backup_name, backup=backup_name)
-    # # trainer.run()
-    # backup_name = "off-policy-lambda-0.75"
-    # trainer = Trainer(name=backup_name, backup=backup_name)
-    # # trainer.tree_strap = True
-    # trainer.run()
-    #
-    # backup_name = "off-policy-lambda-0.5"
-    # trainer = Trainer(name=backup_name, backup=backup_name)
-    # # trainer.tree_strap = True
-    # trainer.run()
-
-    # backup_name = "soft-Z-hybrid-MC"
-    # trainer = Trainer(name=backup_name, backup=backup_name)
-    # # trainer.tree_strap = True
-    # trainer.run()
-    #
-    # backup_name = "soft-Z-hybrid-2"
-    # trainer = Trainer(name=backup_name, backup=backup_name)
-    # # trainer.tree_strap = True
-    # trainer.run()
-    # backup_name = "A0C"
-    # trainer = Trainer(name=backup_name, backup=backup_name)
-    # trainer.run()
-    # #
-    # backup_name = "on-policy"
-    # trainer = Trainer(name=backup_name, backup=backup_name)
-    # trainer.run()
