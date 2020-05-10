@@ -98,7 +98,8 @@ class MCTS:
                  n_playouts=100,
                  use_dirichlet=True,
                  dirichlet_ratio=0.25,
-                 use_puct=True):
+                 use_puct=True,
+                 **kwargs):
         """Initializes the MCTS search tree
 
         Args:
@@ -117,7 +118,7 @@ class MCTS:
         self.n_playouts = n_playouts
         self.use_dirichlet = use_dirichlet
         self.use_puct = use_puct
-        self.dirichlet_ratio = dirichlet_raio
+        self.dirichlet_ratio = dirichlet_ratio
         self.root = Node(None, 0.0)
         self.policy_fn = policy_fn
         self.dirichlet = {}

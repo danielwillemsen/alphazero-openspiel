@@ -249,8 +249,6 @@ class Trainer:
                                      n_pools=self.n_pools,
                                      n_processes=self.n_processes)
 
-        self.test_data['games_played'].append(self.games_played)
-
         score_tot = 0.
         for i in range(self.n_tests):
             score1, score2 = test_net_vs_random(self.current_net.predict, self.name_game)
@@ -299,34 +297,25 @@ class Trainer:
             self.n_games_buffer += self.n_games_per_generation
         logger.info("Buffer size:" + str(self.n_games_buffer))
 
+
+""" Main script to run.
+"""
 if __name__ == '__main__':
     logger = logging.getLogger('alphazero')
     multiprocessing.set_start_method('spawn')
 
     backup_name = "on-policy"
     trainer = Trainer(name=backup_name,backup=backup_name)
-    trainer.temperature = 1.0
-    trainer.uct_train = 2.5
-    trainer.dirichlet_ratio = 0.25
     trainer.run()
 
     backup_name = "soft-Z"
     trainer = Trainer(name=backup_name,backup=backup_name)
-    trainer.temperature = 1.0
-    trainer.uct_train = 2.5
-    trainer.dirichlet_ratio = 0.25
     trainer.run()
 
     backup_name = "A0C"
     trainer = Trainer(name=backup_name,backup=backup_name)
-    trainer.temperature = 1.0
-    trainer.uct_train = 2.5
-    trainer.dirichlet_ratio = 0.25
     trainer.run()
 
     backup_name = "off-policy"
     trainer = Trainer(name=backup_name,backup=backup_name)
-    trainer.temperature = 1.0
-    trainer.uct_train = 2.5
-    trainer.dirichlet_ratio = 0.25
     trainer.run()
