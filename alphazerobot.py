@@ -24,7 +24,7 @@ class AlphaZeroBot(pyspiel.Bot):
     """
 
     def __init__(self, game, player, policy_fn, self_play=False, keep_search_tree=True, **kwargs):
-        #super(AlphaZeroBot, self).__init__(game, player)
+        super(AlphaZeroBot, self).__init__(game, player)
         self.num_distinct_actions = game.num_distinct_actions()
         self.policy_fn = policy_fn
         self.kwargs = kwargs
@@ -60,16 +60,12 @@ class AlphaZeroBot(pyspiel.Bot):
         normalized_visit_counts = np.array(self.mcts.search(state))
         legal_actions = state.legal_actions(state.current_player())
 
-        # if self.self_play:
-        #     value_probabilities = np.array(self.mcts.get_value_changes())
-        #     action_probabilities = 0.95 * normalized_visit_counts + 0.05 * value_probabilities
-        #     action_probabilities = remove_illegal_actions(action_probabilities, legal_actions)
-        # else:
-        action_probabilities = remove_illegal_actions(normalized_visit_counts, legal_actions)
         # Remove illegal actions
-        targets = remove_illegal_actions(np.array(self.mcts.get_target_probabilities()), legal_actions)
+        normalized_visit_counts_legal_actions = remove_illegal_actions(normalized_visit_counts, legal_actions)
 
-        action_probabilities = action_probabilities**(1./self.temperature)/sum(action_probabilities**(1./self.temperature))
+        # Action probabilities based on temperature
+        action_probabilities = normalized_visit_counts_legal_actions**(1./self.temperature)/sum(normalized_visit_counts_legal_actions**(1./self.temperature))
+
         # Select the action, either probabilistically or simply the best.
         if self.use_random_actions and len(state.history()) < self.num_probabilistic_actions:
             action = np.random.choice(legal_actions)
@@ -78,10 +74,10 @@ class AlphaZeroBot(pyspiel.Bot):
         else:
             action = np.argmax(action_probabilities)
 
-        # This format is needed for the bot API
+        # Set the training targets for the policy
         policy = []
         for act in legal_actions:
-            policy.append((act, targets[act]))
+            policy.append((act, normalized_visit_counts_legal_actions[act]))
 
         return policy, action
 

@@ -153,50 +153,33 @@ def play_game_self(policy_fn, game_name, **kwargs):
     state_shape = game.information_state_normalized_vector_shape()
     num_distinct_actions = game.num_distinct_actions()
     alphazero_bot = AlphaZeroBot(game, 0, policy_fn, self_play=True, **kwargs)
-    backup_type = str(kwargs.get("backup", "MC"))
-    tree_strap = bool(kwargs.get("tree_strap", False))
+    backup_type = str(kwargs.get("backup", "on-policy"))
     while not state.is_terminal():
+        # Select action, get policy training target
         policy, action = alphazero_bot.step(state)
+
+        # Create a policy list. To be used in the net instead of a list of tuples.
         policy_dict = dict(policy)
         policy_list = []
         for i in range(num_distinct_actions):
-            # Create a policy list. To be used in the net instead of a list of tuples.
             policy_list.append(policy_dict.get(i, 0.0))
-        # MC
+
+        # Add samples to store in replay buffer. Note this is the only difference between the algorithms in the paper.
+        # On-policy
         if backup_type == "on-policy":
-            if tree_strap:
-                examples.append([state.information_state(), state_to_board(state, state_shape), policy_list,
-                                 None , []])
-                for action_temp, child_temp in alphazero_bot.mcts.root.children.items():
-                    if child_temp.N > 10:  # The five is a tunable hyperparameter
-                        copy_state = state.clone()
-                        copy_state.apply_action(action_temp)
-                        if not copy_state.is_terminal():
-                            examples[-1][4].append(
-                                [copy_state.information_state(), state_to_board(copy_state, state_shape), None,
-                                 -child_temp.Q])
-                # tree_strap_examples = get_examples_tree_strap_soft_Z(alphazero_bot.mcts.root, state.clone(), state_shape)
-                # examples[-1][4] = tree_strap_examples
-            else:
-                examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, None])
+            examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, None])
 
         # Soft-Z
-        if backup_type == "soft-Z" or backup_type == "soft-Z-hybrid-MC" or backup_type == "soft-Z-hybrid-2":
-            if tree_strap:
-                examples.append([state.information_state(), state_to_board(state, state_shape), policy_list,
-                                 -alphazero_bot.mcts.root.Q])
-                tree_strap_examples = get_examples_tree_strap_soft_Z(alphazero_bot.mcts.root, state.clone(), state_shape, num_distinct_actions)
-                for example in tree_strap_examples:
-                    examples.append(example)
-            else:
-                examples.append([state.information_state(), state_to_board(state, state_shape), policy_list,
+        if backup_type == "soft-Z":
+            examples.append([state.information_state(), state_to_board(state, state_shape), policy_list,
                                  -alphazero_bot.mcts.root.Q])
 
-        # TD
+        # A0C
         if backup_type == "A0C":
             value = max([child.Q if child.N > 0 else -99.0 for child in alphazero_bot.mcts.root.children.values()])
             examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, value])
-        # diff:
+
+        # A0GB:
         if backup_type == "off-policy":
             node = copy.deepcopy(alphazero_bot.mcts.root)
             value_mult = 1.0
@@ -209,241 +192,16 @@ def play_game_self(policy_fn, game_name, **kwargs):
             if node.N > 0:
                 value = node.Q
                 value_mult *=-1.0
-            if tree_strap:
-                examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, value * value_mult])
-                tree_strap_examples = get_examples_tree_strap_off_policy(alphazero_bot.mcts.root, state.clone(), state_shape, num_distinct_actions)
-                for example in tree_strap_examples:
-                    examples.append(example)
-            else:
-                examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, value*value_mult])
+            examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, value*value_mult])
 
-        if backup_type == "off-policy-lambda-0.75":
-            node = copy.deepcopy(alphazero_bot.mcts.root)
-            value_mult = 1
-            lambda_value = 0.75
-            step = 1
-            value_tot = 0.0
-            value_mult *= -1
-            value = node.value
-            value_list = {action_temp: (child.N + child.P if child.N > 0 else -99.0) for action_temp, child in
-                          node.children.items()}
-            action_temp = max(value_list, key=value_list.get)
-            node = node.children[action_temp]
-            while not node.is_leaf():
-                value_mult *= -1
-                value = node.value
-                value_list = {action_temp: (child.N+child.P if child.N>0 else -99.0) for action_temp, child in node.children.items()}
-                action_temp = max(value_list, key=value_list.get)
-                node = node.children[action_temp]
-
-                value_tot += value * value_mult * (1-lambda_value)*lambda_value**(step-1)
-                step += 1
-
-            if node.N > 0:
-                value = node.value
-                value_mult *=-1
-                value_tot += value * value_mult * (1-lambda_value)*lambda_value**(step-1)
-                step += 1
-            value_tot -= value * value_mult * (1-lambda_value)*lambda_value**(step-2)
-            value_tot += value * value_mult * lambda_value**(step-2)
-            if tree_strap:
-                examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, value*value_mult, []])
-                tree_strap_examples = get_examples_tree_strap_off_policy_lambda(alphazero_bot.mcts.root, state.clone(), state_shape, num_distinct_actions)
-                for example in tree_strap_examples:
-                    examples.append(example)
-            else:
-                examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, value_tot])
-        if backup_type == "off-policy-lambda-2":
-            node = copy.deepcopy(alphazero_bot.mcts.root)
-            value_mult = 1
-            lambda_value = 0.75
-            step = 0
-            value_tot = 0.0
-            while not node.is_leaf():
-                value_mult *= -1
-                value = node.value
-                value_list = {action_temp: (child.N+child.P if child.N>0 else -99.0) for action_temp, child in node.children.items()}
-                action_temp = max(value_list, key=value_list.get)
-                node = node.children[action_temp]
-                if step > 0:
-                    value_tot += value * value_mult * (1-lambda_value)*lambda_value**(step-1)
-                step += 1
-
-            if node.N > 0:
-                value = node.value
-                value_mult *=-1
-                value_tot += value * value_mult * (1-lambda_value)*lambda_value**(step-1)
-                step += 1
-            value_tot -= value * value_mult * (1-lambda_value)*lambda_value**(step-2)
-            value_tot += value * value_mult * lambda_value**(step-2)
-            if tree_strap:
-                examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, value*value_mult, []])
-                tree_strap_examples = get_examples_tree_strap_off_policy(alphazero_bot.mcts.root, state.clone(), state_shape)
-                examples[-1][4] = tree_strap_examples
-            else:
-                examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, value_tot])
-        if backup_type == "off-policy-lambda-0.5":
-            node = copy.deepcopy(alphazero_bot.mcts.root)
-            value_mult = 1
-            lambda_value = 0.5
-            step = 1
-            value_tot = 0.0
-            while not node.is_leaf():
-                value_mult *= -1
-                value = node.Q
-                value_list = {action_temp: (child.N+child.P if child.N>0 else -99.0) for action_temp, child in node.children.items()}
-                action_temp = max(value_list, key=value_list.get)
-                node = node.children[action_temp]
-
-                value_tot += value * value_mult * (1-lambda_value)*lambda_value**(step-1)
-                step += 1
-
-            if node.N > 0:
-                value = node.Q
-                value_mult *=-1
-                value_tot += value * value_mult * (1-lambda_value)*lambda_value**(step-1)
-                step += 1
-            value_tot -= value * value_mult * (1-lambda_value)*lambda_value**(step-2)
-            value_tot += value * value_mult * lambda_value**(step-2)
-            if tree_strap:
-                examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, value*value_mult, []])
-                tree_strap_examples = get_examples_tree_strap_off_policy(alphazero_bot.mcts.root, state.clone(), state_shape)
-                examples[-1][4] = tree_strap_examples
-            else:
-                examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, value_tot])
+        # Take the actual action in the environment
         state.apply_action(action)
-    # Get return for starting player
+
+    # For on-policy, the return needs to be set after finishing the game.
     if backup_type == "on-policy":
         reward = state.returns()[0]
         for i in range(len(examples)):
             examples[i][3] = reward
             reward *= -1
 
-    if backup_type == "soft-Z-hybrid-2":
-        for i in range(len(examples)):
-            if i<len(examples)-1:
-                examples[i][3] = -0.5*examples[i+1][3] + 0.5*examples[i][3]
-
-    if backup_type == "soft-Z-hybrid-MC":
-        reward = state.returns()[0]
-        for i in range(len(examples)):
-            examples[i][3] = 0.5*examples[i][3] + 0.5*reward
-            reward *= -1
     return examples
-
-def get_examples_tree_strap_off_policy(node, state, state_shape, num_distinct_actions):
-    examples = []
-    node_base = node
-    if node.N > 20 and not state.is_terminal():
-        for action_temp, child in node.children.items():
-            if child.N > 20:
-                temp_state = state.clone()
-                temp_state.apply_action(action_temp)
-                single_examples = get_examples_tree_strap_off_policy(child, temp_state, state_shape, num_distinct_actions)
-                for example in single_examples:
-                    examples.append(example)
-        value_mult = 1
-        while not node.is_leaf():
-            value = node.Q
-            value_list = {action_temp: (child.N + child.P if child.N > 0 else -99.0) for action_temp, child in node.children.items()}
-            action_temp = max(value_list, key=value_list.get)
-            node = node.children[action_temp]
-            value_mult *= -1
-        if node.N > 0:
-            value = node.Q
-            value_mult *= -1.0
-        legal_actions = state.legal_actions(state.current_player())
-        #action_probabilities = remove_illegal_actions(normalized_visit_counts, legal_actions)
-        # Remove illegal actions
-        visits = [node_base.children[i].N if i in node_base.children else 0 for i in range(num_distinct_actions)]
-        probabilities = [float(visit) / sum(visits) for visit in visits]
-        examples.append([state.information_state(), state_to_board(state, state_shape), None, value*value_mult])
-    return examples
-
-def get_examples_tree_strap_off_policy_lambda(node, state, state_shape, num_distinct_actions):
-    examples = []
-    node_base = node
-    if node.N > 20 and not state.is_terminal():
-        for action_temp, child in node.children.items():
-            if child.N > 20:
-                temp_state = state.clone()
-                temp_state.apply_action(action_temp)
-                single_examples = get_examples_tree_strap_off_policy_lambda(child, temp_state, state_shape, num_distinct_actions)
-                for example in single_examples:
-                    examples.append(example)
-        value_mult = 1
-        lambda_value = 0.75
-        step = 1
-        value_tot = 0.0
-        value_mult *= -1
-        value = node.value
-        value_list = {action_temp: (child.N + child.P if child.N > 0 else -99.0) for action_temp, child in
-                      node.children.items()}
-        action_temp = max(value_list, key=value_list.get)
-        node = node.children[action_temp]
-        while not node.is_leaf():
-            value_mult *= -1
-            value = node.value
-            value_list = {action_temp: (child.N + child.P if child.N > 0 else -99.0) for action_temp, child in
-                          node.children.items()}
-            action_temp = max(value_list, key=value_list.get)
-            node = node.children[action_temp]
-
-            value_tot += value * value_mult * (1 - lambda_value) * lambda_value ** (step - 1)
-            step += 1
-
-        if node.N > 0:
-            value = node.value
-            value_mult *= -1
-            value_tot += value * value_mult * (1 - lambda_value) * lambda_value ** (step - 1)
-            step += 1
-        value_tot -= value * value_mult * (1 - lambda_value) * lambda_value ** (step - 2)
-        value_tot += value * value_mult * lambda_value ** (step - 2)
-        # legal_actions = state.legal_actions(state.current_player())
-        # #action_probabilities = remove_illegal_actions(normalized_visit_counts, legal_actions)
-        # # Remove illegal actions
-        # visits = [node_base.children[i].N if i in node_base.children else 0 for i in range(num_distinct_actions)]
-        # probabilities = [float(visit) / sum(visits) for visit in visits]
-        examples.append([state.information_state(), state_to_board(state, state_shape), None, value*value_mult])
-    return examples
-
-def get_examples_tree_strap_soft_Z(node, state, state_shape, num_distinct_actions):
-    examples = []
-    if node.N > 10 and not state.is_terminal():
-        for action_temp, child in node.children.items():
-            if child.N > 10:
-                temp_state = state.clone()
-                temp_state.apply_action(action_temp)
-                single_examples = get_examples_tree_strap_soft_Z(child, temp_state, state_shape, num_distinct_actions)
-                for example in single_examples:
-                    examples.append(example)
-        value = node.Q
-        legal_actions = state.legal_actions(state.current_player())
-        #action_probabilities = remove_illegal_actions(normalized_visit_counts, legal_actions)
-        # Remove illegal actions
-        visits = [node.children[i].N if i in node.children else 0 for i in range(num_distinct_actions)]
-        probabilities = [float(visit) / sum(visits) for visit in visits]
-        #targets = remove_illegal_actions(np.array(self.mcts.get_target_probabilities()), legal_actions)
-        examples.append([state.information_state(), state_to_board(state, state_shape), None, value*-1])
-    return examples
-
-# def get_examples_tree_strap_soft_Z(node, state, state_shape, num_distinct_actions):
-#     examples = []
-#     if node.N > 15 and not state.is_terminal():
-#         for action_temp, child in node.children.items():
-#             if child.N > 15:
-#                 temp_state = state.clone()
-#                 temp_state.apply_action(action_temp)
-#                 single_examples = get_examples_tree_strap_soft_Z(child, temp_state, state_shape, num_distinct_actions)
-#                 for example in single_examples:
-#                     examples.append(example)
-#         value = node.Q
-#         visits = [node.children[i].N if i in node.children else 0 for i in range(num_distinct_actions)]
-#         normalized_visit_counts = [float(visit) / sum(visits) for visit in visits]
-#         legal_actions = state.legal_actions(state.current_player())
-#         action_probabilities = remove_illegal_actions(np.array(normalized_visit_counts), legal_actions)
-#         policy = []
-#         for act in legal_actions:
-#             policy.append(action_probabilities[act])
-#         examples.append([state.information_state(), state_to_board(state, state_shape), action_probabilities.tolist(), value*-1])
-#     return examples

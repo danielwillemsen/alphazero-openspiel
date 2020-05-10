@@ -124,30 +124,15 @@ class MCTS:
         """
         visits = [self.root.children[i].N if i in self.root.children else 0 for i in range(self.num_distinct_actions)]
         return [float(visit) / sum(visits) for visit in visits]
-        #
-        # visits = [self.root.children[i].N if i in self.root.children else 0 for i in range(self.num_distinct_actions)]
-        # return [float(visit) / sum(visits) for visit in visits]
-        # visits = [self.root.children[i].N if i in self.root.children else 0 for i in range(self.num_distinct_actions)]
-        # visits = [float(visit) / sum(visits) for visit in visits]
-        # visits = [visit - self.dirichlet[i] if i in self.dirichlet and self.dirichlet[i] < visit else 0.0 for i, visit in enumerate(visits)]
-        # return [float(visit) / sum(visits) for visit in visits]
 
-        # visits = [(self.root.children[i].Q+1.0)**4 if i in self.root.children and self.root.children[i].N > 0 else 0.0001 for i in range(self.num_distinct_actions)]
-        # return [float(visit) / sum(visits) for visit in visits]
     def get_target_probabilities(self):
         """For now simply linear with the amount of visits.
         @todo check how this is done in the alphaZero paper
 
         @return:
         """
-        # visits = [self.root.children[i].N if i in self.root.children else 0 for i in range(self.num_distinct_actions)]
-        # return [float(visit) / sum(visits) for visit in visits]
-        #
-        # visits = [self.root.children[i].N if i in self.root.children else 0 for i in range(self.num_distinct_actions)]
-        # return [float(visit) / sum(visits) for visit in visits]
+
         visits = [self.root.children[i].N if i in self.root.children else 0 for i in range(self.num_distinct_actions)]
-        # visits = [float(visit) / sum(visits) for visit in visits]
-        # visits = [(visit - self.dirichlet[i])**0.9 if i in self.dirichlet and self.dirichlet[i] < visit else 0.00001 for i, visit in enumerate(visits)]
         return [float(visit) / sum(visits) for visit in visits]
 
     def get_value_changes(self):
