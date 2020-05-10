@@ -19,18 +19,18 @@ logger = logging.getLogger('alphazero')
 
 
 class Trainer:
-    def __init__(self):
+    def __init__(self, name="openspieltest", backup="on-policy"):
         # Experiment Parameters
-        self.name_game = "breakthrough(rows=6,columns=6)"         # Name of game (should be from open_spiel library)
-        self.name_run = "openspieltest"         # Name of run
+        self.name_game = "connect_four"#"breakthrough(rows=6,columns=6)"         # Name of game (should be from open_spiel library)
+        self.name_run = name         # Name of run
         self.model_path = "models/"             # Path to save the models
         self.save = True                        # Save neural network
         self.save_n_gens = 10                   # How many iterations until network save
         self.test_n_gens = 10                   # How many iterations until testing
         self.n_tests = 200                      # How many tests to perform for testing
         self.use_gpu = True                     # Use GPU (if available)
-        self.n_pools = 4                        # Amount of worker pools to create (also amount of GPU's to utilize)
-        self.n_processes = 50                   # Amount of game processes to start for every pool.
+        self.n_pools = 1                        # Amount of worker pools to create (also amount of GPU's to utilize)
+        self.n_processes = 1                    # Amount of game processes to start for every pool.
 
         # Algorithm Parameters
         self.n_games_per_generation = 500       # How many games to generate per iteration
@@ -38,8 +38,15 @@ class Trainer:
         self.n_games_buffer_max = 20000         # How many games to store in FIFO buffer, at most. Buffer is grown.
         self.batch_size = 256                   # Batch size for neural network training
         self.lr = 0.001                         # Learning rate for neural network
-        self.n_games_buffer = 2000              # Starting size of the buffer
-        self.n_playouts_train = 100             # Amount of simulations for the MCTS during training
+        self.n_games_buffer = 4 * self.n_games_per_generation
+        self.temperature = 1.0
+        self.dirichlet_ratio = 0.25
+        self.uct_train = 2.5
+        self.uct_test = 2.5
+        self.n_playouts_train = 100
+        self.backup = backup
+        self.tree_strap = False
+        self.it = 0
 
         # Initialization of the trainer
         self.generation = 0
@@ -64,6 +71,7 @@ class Trainer:
         logger.addHandler(fh)
         logger.info('Logger started')
         logger.info(str(torch.cuda.is_available()))
+        logger.info(str(backup))
 
         # Setup CUDA if possible
         if self.use_gpu:
@@ -103,20 +111,22 @@ class Trainer:
         v_r = [flattened_buffer[i][3] for i in sample_ids]
 
         x = torch.from_numpy(np.array(x)).float().to(self.device)
-        p_r = torch.tensor(np.array(p_r)).float().to(self.device)
-        v_r = torch.tensor(np.array(v_r)).float().to(self.device)
 
         # Pass through network
         p_t, v_t = self.current_net(x)
+        p_r = [item if item else p_t[i,:].to("cpu").tolist() for i, item in enumerate(p_r)]
+
+        p_r = torch.tensor(np.array(p_r)).float().to(self.device)
+        v_r = torch.tensor(np.array(v_r)).float().to(self.device)
+
 
         # Backward pass
         loss_v = self.criterion_value(v_t, v_r.unsqueeze(1))
         loss_p = -torch.sum(p_r * torch.log(p_t)) / p_r.size()[0]
-
-        # loss_p = self.criterion_policy(p_t, p_r)
         loss = loss_v + loss_p
         loss.backward()
         self.optimizer.step()
+        self.it += 1
         return loss_p, loss_v
 
     def train_network(self):
@@ -161,10 +171,17 @@ class Trainer:
         # Remove duplicates
         flattened_buffer_dict = dict()
         flattened_buffer_counts = dict()
+        flattened_buffer_pol = dict()
+
         for item in flattened_buffer:
             if item[0] in flattened_buffer_dict:
                 # Average policy
-                flattened_buffer_dict[item[0]][2] = [sum(x) for x in zip(flattened_buffer_dict[item[0]][2], item[2])]
+                if item[2] and flattened_buffer_dict[item[0]][2]:
+                    flattened_buffer_dict[item[0]][2] = [sum(x) for x in zip(flattened_buffer_dict[item[0]][2], item[2])]
+                    flattened_buffer_pol[item[0]] += 1
+                elif item[2]:
+                    flattened_buffer_dict[item[0]][2] = item[2]
+
                 # Average value
                 flattened_buffer_dict[item[0]][3] += item[3]
                 flattened_buffer_counts[item[0]] += 1
@@ -172,8 +189,11 @@ class Trainer:
             else:
                 flattened_buffer_dict[item[0]] = item
                 flattened_buffer_counts[item[0]] = 1
+                flattened_buffer_pol[item[0]] = 1
+
         for key, value in flattened_buffer_dict.items():
-            flattened_buffer_dict[key][2] = [x / flattened_buffer_counts[key] for x in flattened_buffer_dict[key][2]]
+            if flattened_buffer_dict[key][2]:
+                flattened_buffer_dict[key][2] = [x / flattened_buffer_pol[key] for x in flattened_buffer_dict[key][2]]
             flattened_buffer_dict[key][3] = flattened_buffer_dict[key][3] / flattened_buffer_counts[key]
         flattened_buffer = list(flattened_buffer_dict.values())
         logger.info("New amount of samples: " + str(len(flattened_buffer)))
@@ -187,22 +207,18 @@ class Trainer:
             n_games: amount of games to generate
         """
         logger.info("Generating Data")
-        # Generate new training samples
-        # start = time.time()
-        # for i in range(n_games):
-        #     logger.info("Game " + str(i) + " / " + str(n_games))
-        #     examples = play_game_self(self.current_net.predict, self.name_game)
-        #     self.buffer.append(examples)
-        # logger.info("Finished Generating Data (normal)")
-        # logger.info(time.time()-start)
-
         start = time.time()
 
         # Generate the examples
         generator = ExampleGenerator(self.current_net, self.name_game, self.device,
+                                     n_playouts=self.n_playouts_train,
+                                     temperature=self.temperature,
+                                     dirichlet_ratio=self.dirichlet_ratio,
+                                     c_puct=self.uct_train,
+                                     backup=self.backup,
+                                     tree_strap=self.tree_strap,
                                      n_pools=self.n_pools,
-                                     n_processes=self.n_processes,
-                                     n_playouts=self.n_playouts_train)
+                                     n_processes=self.n_processes)
         games = generator.generate_examples(n_games)
         self.games_played += self.n_games_per_generation
 
@@ -226,9 +242,13 @@ class Trainer:
         start = time.time()
         logger.info("Testing...")
         generator = ExampleGenerator(self.current_net, self.name_game, self.device,
+                                     is_test=True,
+                                     temperature=self.temperature,
+                                     dirichlet_ratio=self.dirichlet_ratio,
+                                     c_puct=self.uct_test,
                                      n_pools=self.n_pools,
-                                     n_processes=self.n_processes,
-                                     is_test=True)
+                                     n_processes=self.n_processes)
+
         score_tot = 0.
         for i in range(self.n_tests):
             score1, score2 = test_net_vs_random(self.current_net.predict, self.name_game)
@@ -252,8 +272,11 @@ class Trainer:
     def run(self):
         """Main alphaZero training loop
         """
-        self.test_agent()         # Start with testing the agent
-        while True:
+
+        # Start with testing the agent
+        self.test_agent()
+
+        while self.generation < 201:
             self.generation += 1
             logger.info("Generation:" + str(self.generation))
             self.generate_examples(self.n_games_per_generation)     # Generate new games through self-play
@@ -274,8 +297,25 @@ class Trainer:
             self.n_games_buffer += self.n_games_per_generation
         logger.info("Buffer size:" + str(self.n_games_buffer))
 
+
+""" Main script to run.
+"""
 if __name__ == '__main__':
     logger = logging.getLogger('alphazero')
     multiprocessing.set_start_method('spawn')
-    trainer = Trainer()
+
+    backup_name = "on-policy"
+    trainer = Trainer(name=backup_name,backup=backup_name)
+    trainer.run()
+
+    backup_name = "soft-Z"
+    trainer = Trainer(name=backup_name,backup=backup_name)
+    trainer.run()
+
+    backup_name = "A0C"
+    trainer = Trainer(name=backup_name,backup=backup_name)
+    trainer.run()
+
+    backup_name = "off-policy"
+    trainer = Trainer(name=backup_name,backup=backup_name)
     trainer.run()

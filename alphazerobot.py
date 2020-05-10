@@ -31,8 +31,10 @@ class AlphaZeroBot(pyspiel.Bot):
         self.use_probabilistic_actions = self_play
         if not self.use_probabilistic_actions:
             self.use_probabilistic_actions = bool(kwargs.get("use_probabilistic_actions"))
+        self.use_random_actions = bool(kwargs.get("use_random_actions", False))
         self.num_probabilistic_actions = int(kwargs.get("num_probabilistic_actions", 1000))
         self.mcts = MCTS(self.policy_fn, self.num_distinct_actions, **kwargs)
+        self.temperature = float(kwargs.get("temperature", 1.0))
         self.self_play = self_play
         self.keep_search_tree = keep_search_tree
 
@@ -66,21 +68,26 @@ class AlphaZeroBot(pyspiel.Bot):
 
         # Perform the MCTS
         normalized_visit_counts = np.array(self.mcts.search(state))
+        legal_actions = state.legal_actions(state.current_player())
 
         # Remove illegal actions
-        legal_actions = state.legal_actions(state.current_player())
-        normalized_visit_counts = remove_illegal_actions(normalized_visit_counts, legal_actions)
+        normalized_visit_counts_legal_actions = remove_illegal_actions(normalized_visit_counts, legal_actions)
+
+        # Action probabilities based on temperature
+        action_probabilities = normalized_visit_counts_legal_actions**(1./self.temperature)/sum(normalized_visit_counts_legal_actions**(1./self.temperature))
 
         # Select the action, either probabilistically or simply the best.
-        if self.use_probabilistic_actions and len(state.history()) < self.num_probabilistic_actions:
-            action = np.random.choice(len(normalized_visit_counts), p=normalized_visit_counts)
+        if self.use_random_actions and len(state.history()) < self.num_probabilistic_actions:
+            action = np.random.choice(legal_actions)
+        elif self.use_probabilistic_actions and len(state.history()) < self.num_probabilistic_actions:
+            action = np.random.choice(len(action_probabilities), p=action_probabilities)
         else:
-            action = np.argmax(normalized_visit_counts)
+            action = np.argmax(action_probabilities)
 
-        # This format is needed for the bot API
+        # Set the training targets for the policy
         policy = []
         for act in legal_actions:
-            policy.append((act, normalized_visit_counts[act]))
+            policy.append((act, normalized_visit_counts_legal_actions[act]))
 
         return policy, action
 

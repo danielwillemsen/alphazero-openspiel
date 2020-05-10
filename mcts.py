@@ -75,9 +75,9 @@ class Node:
 
         """
         if self.use_puct:
-            return self.Q + c_puct * self.P * np.sqrt(self.parent.N) / (self.N+1)
+            return self.Q + c_puct * self.P * math.sqrt(self.parent.N) / (self.N+1)
         else:
-            return float('inf') if self.N == 0 else self.Q + c_puct * self.P * np.sqrt(math.log(self.parent.N) / (self.N))
+            return float('inf') if self.N == 0 else self.Q + c_puct * self.P * math.sqrt(math.log(self.parent.N) / (self.N))
 
     def update(self, value):
         self.Q = (self.N * self.Q + value) / (self.N + 1)
@@ -94,7 +94,12 @@ class MCTS:
     """
 
     def __init__(self, policy_fn, num_distinct_actions,
-                 c_puct=2.5, n_playouts=100, use_dirichlet=True, use_puct=True):
+                 c_puct=2.5,
+                 n_playouts=100,
+                 use_dirichlet=True,
+                 dirichlet_ratio=0.25,
+                 use_puct=True,
+                 **kwargs):
         """Initializes the MCTS search tree
 
         Args:
@@ -113,8 +118,10 @@ class MCTS:
         self.n_playouts = n_playouts
         self.use_dirichlet = use_dirichlet
         self.use_puct = use_puct
+        self.dirichlet_ratio = dirichlet_ratio
         self.root = Node(None, 0.0)
         self.policy_fn = policy_fn
+        self.dirichlet = {}
 
     def playout(self, state):
         """Do a single MCTS simulation
@@ -134,7 +141,7 @@ class MCTS:
             node, action = node.select(self.c_puct)
             state.apply_action(action)
 
-        # Expansion & "Simulation (policy-value function evaluation"
+        # Expansion & "Simulation (policy-value function evaluation)"
         if not state.is_terminal():
             prior_ps, leaf_value = self.policy_fn(state)
             node.expand(prior_ps, state.legal_actions(state.current_player()))
@@ -176,7 +183,7 @@ class MCTS:
         prior_ps, leaf_value = self.policy_fn(state)
         legal_actions = state.legal_actions(state.current_player())
         if self.use_dirichlet:
-            prior_ps = (0.75 * np.array(prior_ps))
+            prior_ps = ((1.0-self.dirichlet_ratio) * np.array(prior_ps))
             dirichlet = list(np.random.dirichlet(0.3 * np.ones(len(legal_actions))))
             for i, action in enumerate(legal_actions):
                 prior_ps[action] = prior_ps[action] + 0.25*dirichlet[i]

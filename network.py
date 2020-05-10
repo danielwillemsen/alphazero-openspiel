@@ -34,13 +34,15 @@ class Net(nn.Module):
 
         self.device = kwargs.get('device', torch.device('cpu'))
         self.time1 = time.time()
+        self.n_filts = 50
 
-        self.resblock1 = ResidualBlock(self.num_filters_input, 50)
-        self.resblock2 = ResidualBlock(50, 50)
-        self.resblock3 = ResidualBlock(50, 50)
-        self.resblock4 = ResidualBlock(50, 50)
-        self.resblock5 = ResidualBlock(50, 50)
-        self.fc1 = nn.Linear(50*self.width*self.height, self.num_distinct_actions + 1)
+        self.resblock1 = ResidualBlock(self.num_filters_input, self.n_filts)
+        self.resblock2 = ResidualBlock(self.n_filts, self.n_filts)
+        self.resblock3 = ResidualBlock(self.n_filts, self.n_filts)
+        self.resblock4 = ResidualBlock(self.n_filts, self.n_filts)
+        self.resblock5 = ResidualBlock(self.n_filts, self.n_filts)
+
+        self.fc1 = nn.Linear(self.n_filts*self.width*self.height, self.num_distinct_actions + 1)
         return
 
     def forward(self, x):
@@ -55,9 +57,10 @@ class Net(nn.Module):
         x = self.resblock4(x)
         x = self.resblock5(x)
 
-        x = x.view(-1, self.height * self.width * 50)
+        x = x.view(-1, self.height * self.width * self.n_filts)
         x = self.fc1(x)
         xp, v = x.split(self.num_distinct_actions, 1)
+
         return F.softmax(xp, dim=1), torch.tanh(v)
 
     def predict(self, state):
@@ -75,6 +78,7 @@ class Net(nn.Module):
             ps = p_t.tolist()[0]
             v = float(v_t)
         return ps, v
+
 
 class ResidualBlock(nn.Module):
     def __init__(self, in_channels, out_channels):

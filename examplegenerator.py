@@ -17,8 +17,6 @@ logger = logging.getLogger('alphazero')
 def generate_single_game(tup):
     conn, game_name, kwargs, _, _, _ = tup
     game = pyspiel.load_game(game_name)
-    niceness = os.nice(0)
-    os.nice(5-niceness)
     evaluator = Evaluator(conn, game)
     example = play_game_self(evaluator.evaluate_nn, game_name, **kwargs)
     return example
@@ -28,10 +26,7 @@ def test_single_game(tup):
     conn, game_name, kwargs, game_fn, conn2, _ = tup
     n_playouts_mcts = tup[5][0]
     game = pyspiel.load_game(game_name)
-    niceness = os.nice(0)
-    os.nice(5-niceness)
     evaluator = Evaluator(conn, game)
-    generate_statistics = bool(kwargs.get("generate_statistics", False))
     if conn2:
         evaluator2 = Evaluator(conn2, game)
         score1, score2, statistics = game_fn(evaluator.evaluate_nn, n_playouts_mcts, game_name, policy_fn2=evaluator2.evaluate_nn, **kwargs)

@@ -5,7 +5,13 @@ from network import state_to_board
 import copy
 from alphazerobot import AlphaZeroBot, NeuralNetBot
 from network import Net
+from alphazerobot import remove_illegal_actions
 
+class HumanBot():
+    def step(self, state):
+        print(state)
+        action = int(input("Give Action"))
+        return 0, action
 
 def play_game(game, player1, player2, generate_statistics=False):
     # Returns the reward of the first player
@@ -28,6 +34,19 @@ def play_game(game, player1, player2, generate_statistics=False):
     else:
         return state.returns()[0]
 
+def test_zero_vs_human(policy_fn):
+    game = pyspiel.load_game('connect_four')
+
+    # Alphazero first
+    zero_bot = AlphaZeroBot(game, 0, policy_fn=policy_fn, use_dirichlet=False)
+    human_bot = HumanBot()
+    score1 = play_game(game, zero_bot, human_bot)
+
+    # Random bot first
+    zero_bot = AlphaZeroBot(game, 1, policy_fn=policy_fn, use_dirichlet=False)
+    random_bot = pyspiel.make_uniform_random_bot(game, 0, np.random.randint(0, 1000))
+    score2 = -play_game(game, human_bot, zero_bot)
+    return score1, score2, None
 
 def test_zero_vs_random(policy_fn):
     game = pyspiel.load_game('connect_four')
@@ -133,18 +152,55 @@ def play_game_self(policy_fn, game_name, **kwargs):
     state_shape = game.information_state_normalized_vector_shape()
     num_distinct_actions = game.num_distinct_actions()
     alphazero_bot = AlphaZeroBot(game, 0, policy_fn, self_play=True, **kwargs)
+    backup_type = str(kwargs.get("backup", "on-policy"))
     while not state.is_terminal():
+        # Select action, get policy training target
         policy, action = alphazero_bot.step(state)
+
+        # Create a policy list. To be used in the net instead of a list of tuples.
         policy_dict = dict(policy)
         policy_list = []
         for i in range(num_distinct_actions):
-            # Create a policy list. To be used in the net instead of a list of tuples.
             policy_list.append(policy_dict.get(i, 0.0))
-        examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, None])
+
+        # Add samples to store in replay buffer. Note this is the only difference between the algorithms in the paper.
+        # On-policy
+        if backup_type == "on-policy":
+            examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, None])
+
+        # Soft-Z
+        if backup_type == "soft-Z":
+            examples.append([state.information_state(), state_to_board(state, state_shape), policy_list,
+                                 -alphazero_bot.mcts.root.Q])
+
+        # A0C
+        if backup_type == "A0C":
+            value = max([child.Q if child.N > 0 else -99.0 for child in alphazero_bot.mcts.root.children.values()])
+            examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, value])
+
+        # A0GB:
+        if backup_type == "off-policy":
+            node = copy.deepcopy(alphazero_bot.mcts.root)
+            value_mult = 1.0
+            while not node.is_leaf():
+                value = node.Q
+                value_list = {action_temp: (child.N+child.P if child.N>0 else -99.0) for action_temp, child in node.children.items()}
+                action_temp = max(value_list, key=value_list.get)
+                node = node.children[action_temp]
+                value_mult *= -1.0
+            if node.N > 0:
+                value = node.Q
+                value_mult *=-1.0
+            examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, value*value_mult])
+
+        # Take the actual action in the environment
         state.apply_action(action)
-    # Get return for starting player
-    reward = state.returns()[0]
-    for i in range(len(examples)):
-        examples[i][3] = reward
-        reward *= -1
+
+    # For on-policy, the return needs to be set after finishing the game.
+    if backup_type == "on-policy":
+        reward = state.returns()[0]
+        for i in range(len(examples)):
+            examples[i][3] = reward
+            reward *= -1
+
     return examples
