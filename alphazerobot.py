@@ -24,7 +24,8 @@ class AlphaZeroBot(pyspiel.Bot):
     """
 
     def __init__(self, game, player, policy_fn, self_play=False, keep_search_tree=True, **kwargs):
-        super(AlphaZeroBot, self).__init__(game, player)
+        if type(game) is pyspiel.Game:
+            super(AlphaZeroBot, self).__init__(game, player)
         self.num_distinct_actions = game.num_distinct_actions()
         self.policy_fn = policy_fn
         self.kwargs = kwargs
