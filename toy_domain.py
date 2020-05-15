@@ -221,11 +221,11 @@ def play_game_self(policy_fn, length, backup_type="on-policy", **kwargs):
 class PVTable:
     def __init__(self, length):
         self.values = np.zeros((length, 2))
-        #self.values = np.random.randn(length, 2)*0.2
 
         self.policy = np.zeros((length, 2, 4)) + 0.25
         self.visits = np.zeros((length, 2))
-        self.extra = 0.999
+
+        #Value table uses exponentially weighted moving average. Correction "extra" corrects for the lower number of samples at the start.
         self.extra = np.zeros((length, 2)) + 0.999
 
     def policy_fn(self, state):
