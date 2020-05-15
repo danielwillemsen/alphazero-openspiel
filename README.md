@@ -17,4 +17,3 @@ mcts.py: Implementation of MCTS guided by a policy-value evaluator.
 
 Here is a broad overview of the code structure.
 ![Code Structure](/documentation/code_structure.png)
-Format: ![Code Structure](url)
