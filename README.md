@@ -14,3 +14,7 @@ alphazerobot.py: OpenSpiel bot implementation of an AlphaZero agent. Selects act
 game_utils.py: Contains the functions to play games. Note that here the difference between value targets is made.
 
 mcts.py: Implementation of MCTS guided by a policy-value evaluator.
+
+Here is a broad overview of the code structure.
+![Code Structure](/documentation/code_structure.png)
+Format: ![Code Structure](url)
