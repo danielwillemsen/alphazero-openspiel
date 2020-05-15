@@ -231,7 +231,7 @@ class PVTable:
     def policy_fn(self, state):
         loc1 = state.location1
         player = state.current_player()
-        return list(self.policy[loc1, player, :]), self.values[loc1, player]/(1.0-self.extra[loc1, player])+np.random.randn(1)*0.1
+        return list(self.policy[loc1, player, :]), self.values[loc1, player]/(1.0-self.extra[loc1, player])
 
 length = 8
 n_games = 40000
