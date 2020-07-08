@@ -147,7 +147,12 @@ def test_zero_vs_zero(policy_fn, max_search_nodes, game_name, policy_fn2=None, g
 
 def play_game_self(policy_fn, game_name, **kwargs):
     examples = []
-    game = pyspiel.load_game(game_name)
+    if game_name == "toy":
+        from toy import ToyGame
+        from toy import state_to_board
+        game = ToyGame(7)
+    else:
+        game = pyspiel.load_game(game_name)
     state = game.new_initial_state()
     state_shape = game.information_state_normalized_vector_shape()
     num_distinct_actions = game.num_distinct_actions()
