@@ -161,34 +161,46 @@ class PVTable:
         player = state.current_player()
         return list(self.policy[loc1, player, :]), self.values[loc1, player]/(1.0-self.extra[loc1, player])
 
-backup_types = ["on-policy", "soft-Z", "hybrid", "off-policy"]
+backup_types = ["on-policy", "soft-Z", "A0C", "off-policy", "greedy-forward"]
 
 length = 7
-n_games = 4000
+n_games = 20000
 num_distinct_actions = 4
+pvtables = {backup_type: PVTable(length) for backup_type in backup_types}
 pvtable = PVTable(length)
-alpha = 0.1
+alpha = 0.025
+backup_res = {}
 for i_game in range(n_games):
-    examples = play_game_self(pvtable.policy_fn, "toy",
+    examples = play_game_self(pvtables["off-policy"].policy_fn, "toy",
                               keep_search_tree=False,
-                              n_playouts=100,
+                              n_playouts=10,
                               c_puct=2.5,
                               dirichlet_ratio=0.25,
                               backup="off-policy",
-                              backup_types=backup_types)
+                              backup_types=backup_types,
+                              length=length)
 
     for example in examples:
         player = example[1].current_player()
         loc1 = example[1].location1
 
         policy = np.array(example[2])
-        value = float(example[3])
-        pvtable.extra[loc1, player] = (1-alpha)*pvtable.extra[loc1, player]
-        pvtable.visits[loc1, player] += 1
-        alpha_p = 0.1
-        pvtable.values[loc1, player] = (1-alpha)*pvtable.values[loc1, player] + alpha * value
-        pvtable.policy[loc1, player, :] = (1-alpha_p)*pvtable.policy[loc1, player] + alpha_p * policy
+        for key, pvtable in pvtables.items():
+            value = float(example[4][key])
+            pvtable.extra[loc1, player] = (1-alpha)*pvtable.extra[loc1, player]
+            pvtable.visits[loc1, player] += 1
 
+
+            alpha_p = 0.025
+            pvtable.values[loc1, player] = (1-alpha)*pvtable.values[loc1, player] + alpha * value
+            pvtable.policy[loc1, player, :] = (1-alpha_p)*pvtable.policy[loc1, player] + alpha_p * policy
+
+        if backup_types[0] in backup_res.keys():
+            for key, pvtable in pvtables.items():
+                backup_res[key].append(pvtable.values[4,0])
+        else:
+            for key, val in example[4].items():
+                backup_res[key] = [pvtable.values[4,0]]
     if i_game%200 == 0:
         #print(str(pvtable.policy[1,0,0]) + str(pvtable.values[1,0,0]) + str(pvtable.policy[3,0,0]) + str(pvtable.values[6,0,0])
         print(str(pvtable.values[:,0]/(1.0-pvtable.extra[:,0])))
@@ -200,164 +212,188 @@ for i_game in range(n_games):
 print(str(pvtable.visits[:,0]))
 final_visits.append(pvtable.visits[:,0])
 
-pol_on = pvtable.policy[:, 0,:]
-values_on = pvtable.values[:,0]/(1.0-pvtable.extra[:,0])
-
-num_distinct_actions = 4
-pvtable = PVTable(length)
-alpha = 0.01
-for i_game in range(n_games):
-    examples = play_game_self(pvtable.policy_fn, length, backup_type="soft-Z", keep_search_tree=False, n_playouts=100, c_puct=2.5, dirichlet_ratio=0.25)
-    for example in examples:
-        player = example[1].current_player()
-        loc1 = example[1].location1
-
-        policy = np.array(example[2])
-        value = float(example[3])
-        pvtable.extra[loc1, player] = (1-alpha)*pvtable.extra[loc1, player]
-        pvtable.visits[loc1, player] += 1
-        alpha_p = 0.025
-        pvtable.values[loc1, player] = (1-alpha)*pvtable.values[loc1, player] + alpha * value
-        pvtable.policy[loc1, player, :] = (1-alpha_p)*pvtable.policy[loc1, player] + alpha_p * policy
-    if i_game%2000 == 0:
-        #print(str(pvtable.policy[1,0,0]) + str(pvtable.values[1,0,0]) + str(pvtable.policy[3,0,0]) + str(pvtable.values[6,0,0])
-        print(str(pvtable.values[:,0]/(1.0-pvtable.extra[:,0])))
-
-        print(str(pvtable.values[:,0]))
-        print(str(pvtable.policy[:,0,:]))
-
-        print(str(pvtable.visits[:,0]))
-print(str(pvtable.visits[:,0]))
-final_visits.append(pvtable.visits[:,0])
-
-pol_soft = pvtable.policy[:,0,:]
-values_soft = pvtable.values[:,0]/(1.0-pvtable.extra[:,0])
-
-num_distinct_actions = 4
-pvtable = PVTable(length)
-alpha = 0.01
-for i_game in range(n_games):
-    examples = play_game_self(pvtable.policy_fn, length, backup_type="A0C", keep_search_tree=False, n_playouts=100, c_puct=2.5, dirichlet_ratio=0.25)
-    for example in examples:
-        player = example[1].current_player()
-        loc1 = example[1].location1
-
-        policy = np.array(example[2])
-        value = float(example[3])
-        pvtable.extra[loc1, player] = (1-alpha)*pvtable.extra[loc1, player]
-        pvtable.visits[loc1, player] += 1
-        alpha_p = 0.025
-        pvtable.values[loc1, player] = (1-alpha)*pvtable.values[loc1, player] + alpha * value
-        pvtable.policy[loc1, player, :] = (1-alpha_p)*pvtable.policy[loc1, player] + alpha_p * policy
-    if i_game%2000 == 0:
-        #print(str(pvtable.policy[1,0,0]) + str(pvtable.values[1,0,0]) + str(pvtable.policy[3,0,0]) + str(pvtable.values[6,0,0])
-        print(str(pvtable.values[:,0]/(1.0-pvtable.extra[:,0])))
-
-        print(str(pvtable.values[:,0]))
-        print(str(pvtable.policy[:,0,:]))
-
-        print(str(pvtable.visits[:,0]))
-print(str(pvtable.visits[:,0]))
-final_visits.append(pvtable.visits[:,0])
-
-pol_A0C = pvtable.policy[:,0,:]
-values_A0C = pvtable.values[:,0]/(1.0-pvtable.extra[:,0])
-
-num_distinct_actions = 4
-pvtable = PVTable(length)
-alpha = 0.01
-for i_game in range(n_games):
-    examples = play_game_self(pvtable.policy_fn, length, backup_type="off-policy", keep_search_tree=False, n_playouts=100, c_puct=2.5, dirichlet_ratio=0.25)
-    for example in examples:
-        player = example[1].current_player()
-        loc1 = example[1].location1
-
-        policy = np.array(example[2])
-        value = float(example[3])
-        pvtable.extra[loc1, player] = (1-alpha)*pvtable.extra[loc1, player]
-        pvtable.visits[loc1, player] += 1
-        alpha_p = 0.025
-        pvtable.values[loc1, player] = (1-alpha)*pvtable.values[loc1, player] + alpha * value
-        pvtable.policy[loc1, player, :] = (1-alpha_p)*pvtable.policy[loc1, player] + alpha_p * policy
-    if i_game%2000 == 0:
-        #print(str(pvtable.policy[1,0,0]) + str(pvtable.values[1,0,0]) + str(pvtable.policy[3,0,0]) + str(pvtable.values[6,0,0])
-        print(str(pvtable.values[:,0]/(1.0-pvtable.extra[:,0])))
-
-        print(str(pvtable.values[:,0]))
-        print(str(pvtable.policy[:,0,:]))
-
-        print(str(pvtable.visits[:,0]))
-print(str(pvtable.visits[:,0]))
-final_visits.append(pvtable.visits[:,0])
-
-pol_off = pvtable.policy[:,0,:]
-
-values_off = pvtable.values[:,0]/(1.0-pvtable.extra[:,0])
-
-pol_total = [pol_on, pol_soft, pol_A0C, pol_off]
-values_total = [values_on, values_soft, values_A0C, values_off]
-
-
-# obj0, obj1, obj2 are created here...
-
-# Saving the objects:
-with open('toy_res.pkl', 'wb') as f:  # Python 3: open(..., 'wb')
-    p.dump([length,final_visits, values_total, pol_total], f)
-
-labels = ["On-policy", "Soft-Z", "A0C", "Off-policy"]
-cmap = cm.get_cmap('RdYlGn', 30)
-
-i = 0
-fig, axes = plt.subplots(nrows=len(values_total), ncols=1, figsize=(8,5), tight_layout=False, constrained_layout=True)
-fig.set_tight_layout(False)
-for ax in axes.flat:
-    #ax.set_axis_off()
-    im = ax.imshow(np.expand_dims(values_total[i],0), label=labels[i], cmap=cmap, vmin=-0.1, vmax=0.1)
-    ax.set_ylabel(labels[i])
-    ax.get_yaxis().set_ticks([])
-    ax.set_xticks(np.arange(length))
-    ax.set_xticklabels(["State " + str(i) for i in range(length)])
-    i+=1
-
-#fig.subplots_adjust(bottom=0.1, top=0.9, left=0.0, right=0.7,
-#                    wspace=0.02, hspace=0.02)
-
-#cb_ax = fig.add_axes([0.87, 0.1, 0.02, 0.8])
-cbar = fig.colorbar(im, ax=axes)
-cbar.set_label('Value', rotation=270, labelpad=10.5)
+for key, val in backup_res.items():
+    plt.plot(val, label=key)
+plt.legend()
 plt.show()
 
-i = 0
-fig, axes = plt.subplots(nrows=len(values_total),ncols=1, figsize=(8,5),constrained_layout=True)
-for ax in axes.flat:
-    #ax.set_axis_off()
-    for it, pol in enumerate(pol_total[i]):
-        if int(np.argmax(pol)) == 0:
-            pol_str = "U"
-            ax.annotate("", xy=(it, 0.25), xytext=(it, -0.25), arrowprops=dict(arrowstyle="->"))
-        elif int(np.argmax(pol)) == 1:
-            pol_str = ""
-            ax.annotate("", xy=(it+0.25, 0), xytext=(it-0.25, 0), arrowprops=dict(arrowstyle="->"))
-        elif int(np.argmax(pol)) == 2:
-            pol_str = ""
-            ax.annotate("", xy=(it+0, 0.25), xytext=(it, -0.25), arrowprops=dict(arrowstyle="->"))
-        else:
-            pol_str = "L"
-        ax.text(it, 0, pol_str, ha='center', va='center')
-    im = ax.imshow(np.expand_dims(pol_total[i][:,1],0), label=labels[i], cmap=cmap, vmin=0.0, vmax=1.0)
-    ax.set_ylabel(labels[i])
-    ax.get_yaxis().set_ticks([])
-    ax.set_xticks(np.arange(length))
-    ax.set_xticklabels(["State " + str(i) for i in range(length)])
-    i+=1
 
-# fig.subplots_adjust(bottom=0.1, top=0.9, left=0.0, right=0.9,
-#                     wspace=0.02, hspace=0.02)
-
-#cb_ax = fig.add_axes([0.87, 0.1, 0.02, 0.8])
-cbar = fig.colorbar(im, ax=axes)
-cbar.set_label('Policy of moving right', rotation=270, labelpad=10.5)
-plt.show()
+# pol_on = pvtable.policy[:, 0,:]
+# values_on = pvtable.values[:,0]/(1.0-pvtable.extra[:,0])
+#
+# num_distinct_actions = 4
+# pvtable = PVTable(length)
+# alpha = 0.01
+# for i_game in range(n_games):
+#     examples = play_game_self(pvtable.policy_fn, "toy",
+#                               keep_search_tree=False,
+#                               n_playouts=100,
+#                               c_puct=2.5,
+#                               dirichlet_ratio=0.25,
+#                               backup="soft-Z",
+#                               backup_types=backup_types)
+#     for example in examples:
+#         player = example[1].current_player()
+#         loc1 = example[1].location1
+#
+#         policy = np.array(example[2])
+#         value = float(example[3])
+#         pvtable.extra[loc1, player] = (1-alpha)*pvtable.extra[loc1, player]
+#         pvtable.visits[loc1, player] += 1
+#         alpha_p = 0.025
+#         pvtable.values[loc1, player] = (1-alpha)*pvtable.values[loc1, player] + alpha * value
+#         pvtable.policy[loc1, player, :] = (1-alpha_p)*pvtable.policy[loc1, player] + alpha_p * policy
+#     if i_game%2000 == 0:
+#         #print(str(pvtable.policy[1,0,0]) + str(pvtable.values[1,0,0]) + str(pvtable.policy[3,0,0]) + str(pvtable.values[6,0,0])
+#         print(str(pvtable.values[:,0]/(1.0-pvtable.extra[:,0])))
+#
+#         print(str(pvtable.values[:,0]))
+#         print(str(pvtable.policy[:,0,:]))
+#
+#         print(str(pvtable.visits[:,0]))
+# print(str(pvtable.visits[:,0]))
+# final_visits.append(pvtable.visits[:,0])
+#
+# pol_soft = pvtable.policy[:,0,:]
+# values_soft = pvtable.values[:,0]/(1.0-pvtable.extra[:,0])
+#
+# num_distinct_actions = 4
+# pvtable = PVTable(length)
+# alpha = 0.01
+# for i_game in range(n_games):
+#     examples = play_game_self(pvtable.policy_fn, "toy",
+#                               keep_search_tree=False,
+#                               n_playouts=100,
+#                               c_puct=2.5,
+#                               dirichlet_ratio=0.25,
+#                               backup="A0C",
+#                               backup_types=backup_types)
+#     for example in examples:
+#         player = example[1].current_player()
+#         loc1 = example[1].location1
+#
+#         policy = np.array(example[2])
+#         value = float(example[3])
+#         pvtable.extra[loc1, player] = (1-alpha)*pvtable.extra[loc1, player]
+#         pvtable.visits[loc1, player] += 1
+#         alpha_p = 0.025
+#         pvtable.values[loc1, player] = (1-alpha)*pvtable.values[loc1, player] + alpha * value
+#         pvtable.policy[loc1, player, :] = (1-alpha_p)*pvtable.policy[loc1, player] + alpha_p * policy
+#     if i_game%2000 == 0:
+#         #print(str(pvtable.policy[1,0,0]) + str(pvtable.values[1,0,0]) + str(pvtable.policy[3,0,0]) + str(pvtable.values[6,0,0])
+#         print(str(pvtable.values[:,0]/(1.0-pvtable.extra[:,0])))
+#
+#         print(str(pvtable.values[:,0]))
+#         print(str(pvtable.policy[:,0,:]))
+#
+#         print(str(pvtable.visits[:,0]))
+# print(str(pvtable.visits[:,0]))
+# final_visits.append(pvtable.visits[:,0])
+#
+# pol_A0C = pvtable.policy[:,0,:]
+# values_A0C = pvtable.values[:,0]/(1.0-pvtable.extra[:,0])
+#
+# num_distinct_actions = 4
+# pvtable = PVTable(length)
+# alpha = 0.01
+# for i_game in range(n_games):
+#     examples = play_game_self(pvtable.policy_fn, "toy",
+#                               keep_search_tree=False,
+#                               n_playouts=100,
+#                               c_puct=2.5,
+#                               dirichlet_ratio=0.25,
+#                               backup="off-policy",
+#                               backup_types=backup_types)
+#     for example in examples:
+#         player = example[1].current_player()
+#         loc1 = example[1].location1
+#
+#         policy = np.array(example[2])
+#         value = float(example[3])
+#         pvtable.extra[loc1, player] = (1-alpha)*pvtable.extra[loc1, player]
+#         pvtable.visits[loc1, player] += 1
+#         alpha_p = 0.025
+#         pvtable.values[loc1, player] = (1-alpha)*pvtable.values[loc1, player] + alpha * value
+#         pvtable.policy[loc1, player, :] = (1-alpha_p)*pvtable.policy[loc1, player] + alpha_p * policy
+#     if i_game%2000 == 0:
+#         #print(str(pvtable.policy[1,0,0]) + str(pvtable.values[1,0,0]) + str(pvtable.policy[3,0,0]) + str(pvtable.values[6,0,0])
+#         print(str(pvtable.values[:,0]/(1.0-pvtable.extra[:,0])))
+#
+#         print(str(pvtable.values[:,0]))
+#         print(str(pvtable.policy[:,0,:]))
+#
+#         print(str(pvtable.visits[:,0]))
+# print(str(pvtable.visits[:,0]))
+# final_visits.append(pvtable.visits[:,0])
+#
+# pol_off = pvtable.policy[:,0,:]
+#
+# values_off = pvtable.values[:,0]/(1.0-pvtable.extra[:,0])
+#
+# pol_total = [pol_on, pol_soft, pol_A0C, pol_off]
+# values_total = [values_on, values_soft, values_A0C, values_off]
+#
+#
+# # obj0, obj1, obj2 are created here...
+#
+# # Saving the objects:
+# with open('toy_res.pkl', 'wb') as f:  # Python 3: open(..., 'wb')
+#     p.dump([length,final_visits, values_total, pol_total], f)
+#
+# labels = ["On-policy", "Soft-Z", "A0C", "Off-policy"]
+# cmap = cm.get_cmap('RdYlGn', 30)
+#
+# i = 0
+# fig, axes = plt.subplots(nrows=len(values_total), ncols=1, figsize=(8,5), tight_layout=False, constrained_layout=True)
+# fig.set_tight_layout(False)
+# for ax in axes.flat:
+#     #ax.set_axis_off()
+#     im = ax.imshow(np.expand_dims(values_total[i],0), label=labels[i], cmap=cmap, vmin=-0.1, vmax=0.1)
+#     ax.set_ylabel(labels[i])
+#     ax.get_yaxis().set_ticks([])
+#     ax.set_xticks(np.arange(length))
+#     ax.set_xticklabels(["State " + str(i) for i in range(length)])
+#     i+=1
+#
+# #fig.subplots_adjust(bottom=0.1, top=0.9, left=0.0, right=0.7,
+# #                    wspace=0.02, hspace=0.02)
+#
+# #cb_ax = fig.add_axes([0.87, 0.1, 0.02, 0.8])
+# cbar = fig.colorbar(im, ax=axes)
+# cbar.set_label('Value', rotation=270, labelpad=10.5)
+# plt.show()
+#
+# i = 0
+# fig, axes = plt.subplots(nrows=len(values_total),ncols=1, figsize=(8,5),constrained_layout=True)
+# for ax in axes.flat:
+#     #ax.set_axis_off()
+#     for it, pol in enumerate(pol_total[i]):
+#         if int(np.argmax(pol)) == 0:
+#             pol_str = "U"
+#             ax.annotate("", xy=(it, 0.25), xytext=(it, -0.25), arrowprops=dict(arrowstyle="->"))
+#         elif int(np.argmax(pol)) == 1:
+#             pol_str = ""
+#             ax.annotate("", xy=(it+0.25, 0), xytext=(it-0.25, 0), arrowprops=dict(arrowstyle="->"))
+#         elif int(np.argmax(pol)) == 2:
+#             pol_str = ""
+#             ax.annotate("", xy=(it+0, 0.25), xytext=(it, -0.25), arrowprops=dict(arrowstyle="->"))
+#         else:
+#             pol_str = "L"
+#         ax.text(it, 0, pol_str, ha='center', va='center')
+#     im = ax.imshow(np.expand_dims(pol_total[i][:,1],0), label=labels[i], cmap=cmap, vmin=0.0, vmax=1.0)
+#     ax.set_ylabel(labels[i])
+#     ax.get_yaxis().set_ticks([])
+#     ax.set_xticks(np.arange(length))
+#     ax.set_xticklabels(["State " + str(i) for i in range(length)])
+#     i+=1
+#
+# # fig.subplots_adjust(bottom=0.1, top=0.9, left=0.0, right=0.9,
+# #                     wspace=0.02, hspace=0.02)
+#
+# #cb_ax = fig.add_axes([0.87, 0.1, 0.02, 0.8])
+# cbar = fig.colorbar(im, ax=axes)
+# cbar.set_label('Policy of moving right', rotation=270, labelpad=10.5)
+# plt.show()
 # cax = ax1.imshow(values_total,  cmap=cmap)
 # ax1.set_yticks(np.arange(len(labels)))
 # ax1.set_yticklabels(labels)

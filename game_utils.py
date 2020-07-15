@@ -147,20 +147,32 @@ def test_zero_vs_zero(policy_fn, max_search_nodes, game_name, policy_fn2=None, g
 
 def play_game_self(policy_fn, game_name, **kwargs):
     examples = []
+    action_was_greedy_list = []
+
     if game_name == "toy":
         from toy import ToyGame
         from toy import state_to_board
-        game = ToyGame(7)
+        l = int(kwargs.get("length", 7))
+        game = ToyGame(l)
     else:
         game = pyspiel.load_game(game_name)
     state = game.new_initial_state()
     state_shape = game.information_state_normalized_vector_shape()
     num_distinct_actions = game.num_distinct_actions()
     alphazero_bot = AlphaZeroBot(game, 0, policy_fn, self_play=True, **kwargs)
-    backup_type = str(kwargs.get("backup", "on-policy"))
+    backup_types = kwargs.get("backup_types", None)
+    main_backup = kwargs.get("backup", "on-policy")
+
+    if not backup_types:
+        backup_types = {main_backup}
+    #print(main_backup, backup_types)
+    assert main_backup in backup_types, "Main backup should be in backup types."
+
     while not state.is_terminal():
+
         # Select action, get policy training target
         policy, action = alphazero_bot.step(state)
+
 
         # Create a policy list. To be used in the net instead of a list of tuples.
         policy_dict = dict(policy)
@@ -168,23 +180,26 @@ def play_game_self(policy_fn, game_name, **kwargs):
         for i in range(num_distinct_actions):
             policy_list.append(policy_dict.get(i, 0.0))
 
+        # Create target dict
+        targets = {}
+        target = None
+
         # Add samples to store in replay buffer. Note this is the only difference between the algorithms in the paper.
         # On-policy
-        if backup_type == "on-policy":
-            examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, None])
+        # Cannot determine target yet
 
         # Soft-Z
-        if backup_type == "soft-Z":
-            examples.append([state.information_state(), state_to_board(state, state_shape), policy_list,
-                                 -alphazero_bot.mcts.root.Q])
+        if "soft-Z" in backup_types:
+            target = -alphazero_bot.mcts.root.Q
+            targets["soft-Z"] = target
 
         # A0C
-        if backup_type == "A0C":
-            value = max([child.Q if child.N > 0 else -99.0 for child in alphazero_bot.mcts.root.children.values()])
-            examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, value])
+        if "A0C" in backup_types:
+            target = max([child.Q if child.N > 0 else -99.0 for child in alphazero_bot.mcts.root.children.values()])
+            targets["A0C"] = target
 
         # A0GB:
-        if backup_type == "off-policy":
+        if "off-policy" or "greedy-forward" in backup_types:
             node = copy.deepcopy(alphazero_bot.mcts.root)
             value_mult = 1.0
             while not node.is_leaf():
@@ -196,16 +211,33 @@ def play_game_self(policy_fn, game_name, **kwargs):
             if node.N > 0:
                 value = node.Q
                 value_mult *=-1.0
-            examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, value*value_mult])
+            target = value*value_mult
+            if "off-policy" in backup_types:
+                targets["off-policy"] = target
+            if "greedy-forward" in backup_types:
+                targets["greedy-forward"] = target
+                root_Q = [child.Q if child.N > 0 else -99.0 for child in alphazero_bot.mcts.root.children.values()]
+                greedy_action_value = max(root_Q)
+                action_was_greedy_list.append(root_Q[action] >= greedy_action_value - 0.0001)
+
+        examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, None, targets])
 
         # Take the actual action in the environment
         state.apply_action(action)
 
+    if "greedy-forward" in backup_types:
+        for i in reversed(range(len(examples)-1)):
+            if action_was_greedy_list[i]:
+                examples[i][4]["greedy-forward"] = -examples[i+1][4]["greedy-forward"]
+
     # For on-policy, the return needs to be set after finishing the game.
-    if backup_type == "on-policy":
+    if "on-policy" in backup_types:
         reward = state.returns()[0]
         for i in range(len(examples)):
-            examples[i][3] = reward
+            examples[i][4]["on-policy"] = reward
             reward *= -1
+
+    for ex in examples:
+        ex[3] = ex[4][main_backup]
 
     return examples
