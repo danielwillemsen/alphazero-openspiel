@@ -148,6 +148,7 @@ def test_zero_vs_zero(policy_fn, max_search_nodes, game_name, policy_fn2=None, g
 def play_game_self(policy_fn, game_name, **kwargs):
     examples = []
     action_was_greedy_list = []
+    action_was_greedy_list_N = []
 
     if game_name == "toy":
         from toy import ToyGame
@@ -199,7 +200,7 @@ def play_game_self(policy_fn, game_name, **kwargs):
             targets["A0C"] = target
 
         # A0GB:
-        if "off-policy" or "greedy-forward" in backup_types:
+        if "off-policy" or "greedy-forward" or "greedy-forward-N" in backup_types:
             node = copy.deepcopy(alphazero_bot.mcts.root)
             value_mult = 1.0
             while not node.is_leaf():
@@ -219,6 +220,11 @@ def play_game_self(policy_fn, game_name, **kwargs):
                 root_Q = [child.Q if child.N > 0 else -99.0 for child in alphazero_bot.mcts.root.children.values()]
                 greedy_action_value = max(root_Q)
                 action_was_greedy_list.append(root_Q[action] >= greedy_action_value - 0.0001)
+            if "greedy-forward-N" in backup_types:
+                targets["greedy-forward-N"] = target
+                root_N = [child.N if child.N > 0 else -99.0 for child in alphazero_bot.mcts.root.children.values()]
+                greedy_action_value = max(root_N)
+                action_was_greedy_list_N.append(root_N[action] == greedy_action_value)
 
         examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, None, targets])
 
@@ -229,6 +235,11 @@ def play_game_self(policy_fn, game_name, **kwargs):
         for i in reversed(range(len(examples)-1)):
             if action_was_greedy_list[i]:
                 examples[i][4]["greedy-forward"] = -examples[i+1][4]["greedy-forward"]
+
+    if "greedy-forward-N" in backup_types:
+        for i in reversed(range(len(examples)-1)):
+            if action_was_greedy_list_N[i]:
+                examples[i][4]["greedy-forward-N"] = -examples[i+1][4]["greedy-forward-N"]
 
     # For on-policy, the return needs to be set after finishing the game.
     if "on-policy" in backup_types:

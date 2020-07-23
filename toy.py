@@ -1,4 +1,5 @@
 import copy
+import numpy as np
 
 class ToyGame:
     def __init__(self, length):
@@ -9,7 +10,12 @@ class ToyGame:
         return 4
 
     def new_initial_state(self):
-        return State(0, self.length)
+        random_init = True
+        if random_init:
+            location = np.random.randint(self.length)
+        else:
+            location = 0
+        return State(location, self.length)
 
     def information_state_normalized_vector_shape(self):
         return (1,)

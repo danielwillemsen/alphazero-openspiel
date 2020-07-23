@@ -39,14 +39,14 @@ def update_pvtables(example, pvtables):
         pvtable.extra[loc1, player] = (1 - alpha) * pvtable.extra[loc1, player]
         pvtable.visits[loc1, player] += 1
 
-        alpha_p = 0.025
+        alpha_p = 0.1
         pvtable.values[loc1, player] = (1 - alpha) * pvtable.values[loc1, player] + alpha * value
         pvtable.policy[loc1, player, :] = (1 - alpha_p) * pvtable.policy[loc1, player] + alpha_p * policy
 
-backup_types = ["on-policy", "soft-Z", "A0C", "off-policy", "greedy-forward"]
+backup_types = ["on-policy", "soft-Z", "A0C", "off-policy", "greedy-forward", "greedy-forward-N"]
 
 length = 5
-n_games = 5000
+n_games = 1000
 num_distinct_actions = 4
 pvtables = {backup_type: PVTable(length) for backup_type in backup_types}
 pvtable = PVTable(length)
@@ -56,7 +56,7 @@ backup_res = {backup_type: [] for backup_type in backup_types}
 for i_game in range(n_games):
     examples = play_game_self(pvtables["off-policy"].policy_fn, "toy",
                               keep_search_tree=False,
-                              n_playouts=10,
+                              n_playouts=100,
                               c_puct=2.5,
                               dirichlet_ratio=0.25,
                               backup="off-policy",
@@ -67,12 +67,47 @@ for i_game in range(n_games):
 
         #For further data visualization
         for key, pvtable in pvtables.items():
-            backup_res[key].append(pvtable.values[4, 0])
-
+            backup_res[key].append(np.copy(pvtable.values))
+    if backup_res["off-policy"][-1][3,0] > 0.0001:
+        a=2
     if i_game%200 == 0:
         print("Game_no:", i_game, "/", n_games)
 
+backup_plot_res = {backup_type: [] for backup_type in backup_types}
 for key, val in backup_res.items():
-    plt.plot(val, label=key)
+    backup_res[key] = np.stack(val, axis=0)
+
+for key, val in backup_res.items():
+    plt.plot(val[:, 3, 0], label=key)
 plt.legend()
+plt.show()
+
+labels = [type_name.title() for type_name in backup_types]
+cmap = cm.get_cmap('RdYlGn', 30)
+
+i = 0
+fig, axes = plt.subplots(nrows=len(backup_types), ncols=1, figsize=(8,8), tight_layout=False, constrained_layout=True)
+axes[0].set_title(f"Progress over {n_games} games")
+
+fig.set_tight_layout(False)
+for ax in axes.flat:
+    #ax.set_axis_off()
+#     im = ax.imshow(np.expand_dims(values_total[i],0), label=labels[i], cmap=cmap, vmin=-0.1, vmax=0.1)
+    im = ax.imshow(backup_res[backup_types[i]][:,:,0], label=backup_types[i], cmap=cmap, vmin=-0.1, vmax=0.1, aspect='auto', interpolation='none')
+    ax.set_ylabel(labels[i])
+    ax.get_yaxis().set_ticks([])
+    ax.set_xticks(np.arange(length))
+    ax.set_xticklabels([str(i) for i in range(length)])
+    i+=1
+
+axes[-1].annotate("State", xy=(0.5, -0.3), xycoords=axes[-1].get_window_extent,
+                  xytext=(0,0), textcoords="offset points", ha='center', va='bottom')
+
+#fig.subplots_adjust(bottom=0.1, top=0.9, left=0.0, right=0.7,
+#                    wspace=0.02, hspace=0.02)
+
+#cb_ax = fig.add_axes([0.87, 0.1, 0.02, 0.8])
+cbar = fig.colorbar(im, ax=axes)
+cbar.set_label('Value', rotation=270, labelpad=10.5)
+
 plt.show()
