@@ -24,8 +24,8 @@ class AlphaZeroBot(pyspiel.Bot):
     """
 
     def __init__(self, game, player, policy_fn, self_play=False, keep_search_tree=True, **kwargs):
-        if type(game) is pyspiel.Game:
-            super(AlphaZeroBot, self).__init__(game, player)
+        # if type(game) is pyspiel.Game:
+        #     super(AlphaZeroBot, self).__init__(game, player)
         self.num_distinct_actions = game.num_distinct_actions()
         self.policy_fn = policy_fn
         self.kwargs = kwargs
@@ -39,7 +39,7 @@ class AlphaZeroBot(pyspiel.Bot):
         self.self_play = self_play
         self.keep_search_tree = keep_search_tree
 
-    def step(self, state):
+    def step(self, state, return_policy=False):
         """ Bot takes a step by running MCTS and selecting a move
 
         Args:
@@ -89,9 +89,10 @@ class AlphaZeroBot(pyspiel.Bot):
         policy = []
         for act in legal_actions:
             policy.append((act, normalized_visit_counts_legal_actions[act]))
-
-        return policy, action
-
+        if return_policy:
+            return policy, action
+        else:
+            return action
 
 class NeuralNetBot(pyspiel.Bot):
     """ Bot which uses a Neural Network to come up with a move.
@@ -99,10 +100,10 @@ class NeuralNetBot(pyspiel.Bot):
     """
 
     def __init__(self, game, player, policy_fn):
-        super(NeuralNetBot, self).__init__(game, player)
+        #super(NeuralNetBot, self).__init__(game, player)
         self.policy_fn = policy_fn
 
-    def step(self, state):
+    def step(self, state, return_policy=False):
         ps, v = self.policy_fn(state)
         action_probabilities = np.array(ps)
 
@@ -115,5 +116,7 @@ class NeuralNetBot(pyspiel.Bot):
         policy = []
         for act in legal_actions:
             policy.append((act, action_probabilities[act]))
-
-        return policy, action
+        if return_policy:
+            return policy, action
+        else:
+            return action

@@ -17,7 +17,7 @@ class ToyGame:
             location = 0
         return State(location, self.length)
 
-    def information_state_normalized_vector_shape(self):
+    def observation_tensor_shape(self):
         return (1,)
 
 class State:
@@ -45,7 +45,7 @@ class State:
         else:
             return [0]
 
-    def information_state(self):
+    def information_state_string(self):
         return str(self.location1)
 
     def apply_action(self, action):

@@ -5,6 +5,7 @@ from alphazerobot import AlphaZeroBot
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import matplotlib
+import pyspiel
 import pickle as p
 font = {'family' : 'normal',
         'weight' : 'normal',
@@ -29,6 +30,27 @@ class PVTable:
         player = state.current_player()
         return list(self.policy[loc1, player, :]), self.values[loc1, player]/(1.0-self.extra[loc1, player])
 
+class PVTable_tictactoe:
+    def __init__(self, length):
+        self.values = dict()
+
+        self.policy = dict()
+        self.visits = dict() #np.zeros((length, 2))
+
+        #Value table uses exponentially weighted moving average. Correction "extra" corrects for the lower number of samples at the start.
+        self.extra = dict() #np.zeros((length, 2)) + 0.999
+
+    def policy_fn(self, state):
+        if str(state) in self.values.keys():
+            string = str(state)
+            pol = self.policy[string]
+            val = self.values[string]
+        else:
+            pol = np.zeros(9)+ 1./9.
+            val = 0.
+
+        return list(pol), val#/(1.0-self.extra[loc1, player])
+
 def update_pvtables(example, pvtables):
     player = example[1].current_player()
     loc1 = example[1].location1
@@ -45,11 +67,11 @@ def update_pvtables(example, pvtables):
 
 backup_types = ["on-policy", "soft-Z", "A0C", "off-policy", "greedy-forward", "greedy-forward-N"]
 
+game = pyspiel.load_game("connect_four")
 length = 5
 n_games = 1000
 num_distinct_actions = 4
 pvtables = {backup_type: PVTable(length) for backup_type in backup_types}
-pvtable = PVTable(length)
 alpha = 0.025
 backup_res = {backup_type: [] for backup_type in backup_types}
 

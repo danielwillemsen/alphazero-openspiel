@@ -39,7 +39,7 @@ def test_single_game(tup):
 class Evaluator():
     def __init__(self, conn, game):
         self.conn = conn
-        self.state_shape = game.information_state_normalized_vector_shape()
+        self.state_shape = game.observation_tensor_shape()
 
     def evaluate_nn(self, state):
         """

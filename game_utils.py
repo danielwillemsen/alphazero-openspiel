@@ -22,9 +22,9 @@ def play_game(game, player1, player2, generate_statistics=False):
     state = game.new_initial_state()
     while not state.is_terminal():
         if len(state.history()) % 2 == 0:
-            _, action = player1.step(state)
+            action = player1.step(state)
         else:
-            _, action = player2.step(state)
+            action = player2.step(state)
         state.apply_action(action)
         if generate_statistics:
             statistics["player1"].append({"root": copy.deepcopy(player1.mcts.root)})
@@ -68,13 +68,13 @@ def test_zero_vs_mcts(policy_fn, max_search_nodes, game_name, **kwargs):
 
     # Alphazero first
     zero_bot = AlphaZeroBot(game, 0, policy_fn=policy_fn, use_dirichlet=False, **kwargs)
-    mcts_bot = mcts.MCTSBot(game, 1, 1,
+    mcts_bot = mcts.MCTSBot(game, 1,
                             max_search_nodes, mcts.RandomRolloutEvaluator(1))
     score1 = play_game(game, zero_bot, mcts_bot)
 
     # Random bot first
     zero_bot = AlphaZeroBot(game, 1, policy_fn=policy_fn, use_dirichlet=False, **kwargs)
-    mcts_bot = mcts.MCTSBot(game, 0, 1,
+    mcts_bot = mcts.MCTSBot(game, 0,
                             max_search_nodes, mcts.RandomRolloutEvaluator(1))
     score2 = -play_game(game, mcts_bot, zero_bot)
     return score1, score2, None
@@ -85,13 +85,13 @@ def test_net_vs_mcts(policy_fn, max_search_nodes, game_name, **kwargs):
 
     # Alphazero first
     zero_bot = NeuralNetBot(game, 0, policy_fn)
-    mcts_bot = mcts.MCTSBot(game, 1, 1,
+    mcts_bot = mcts.MCTSBot(game, 1,
                             max_search_nodes, mcts.RandomRolloutEvaluator(1))
     score1 = play_game(game, zero_bot, mcts_bot)
 
     # Random bot first
     zero_bot = NeuralNetBot(game, 1, policy_fn)
-    mcts_bot = mcts.MCTSBot(game, 0, 1,
+    mcts_bot = mcts.MCTSBot(game, 0,
                             max_search_nodes, mcts.RandomRolloutEvaluator(1))
     score2 = -play_game(game, mcts_bot, zero_bot)
     return score1, score2, None
@@ -102,12 +102,12 @@ def test_net_vs_random(policy_fn, game_name, **kwargs):
 
     # Alphazero first
     zero_bot = NeuralNetBot(game, 0, policy_fn)
-    random_bot = pyspiel.make_uniform_random_bot(game, 1, np.random.randint(0, 1000))
+    random_bot = pyspiel.make_uniform_random_bot(1, np.random.randint(0, 1000))
     score1 = play_game(game, zero_bot, random_bot)
 
     # Random bot first
     zero_bot = NeuralNetBot(game, 1, policy_fn)
-    random_bot = pyspiel.make_uniform_random_bot(game, 0, np.random.randint(0, 1000))
+    random_bot = pyspiel.make_uniform_random_bot(0, np.random.randint(0, 1000))
     score2 = -play_game(game, random_bot, zero_bot)
     return score1, score2
 
@@ -156,9 +156,10 @@ def play_game_self(policy_fn, game_name, **kwargs):
         l = int(kwargs.get("length", 7))
         game = ToyGame(l)
     else:
+        from network import state_to_board
         game = pyspiel.load_game(game_name)
     state = game.new_initial_state()
-    state_shape = game.information_state_normalized_vector_shape()
+    state_shape = game.observation_tensor_shape()
     num_distinct_actions = game.num_distinct_actions()
     alphazero_bot = AlphaZeroBot(game, 0, policy_fn, self_play=True, **kwargs)
     backup_types = kwargs.get("backup_types", None)
@@ -172,7 +173,7 @@ def play_game_self(policy_fn, game_name, **kwargs):
     while not state.is_terminal():
 
         # Select action, get policy training target
-        policy, action = alphazero_bot.step(state)
+        policy, action = alphazero_bot.step(state, return_policy=True)
 
 
         # Create a policy list. To be used in the net instead of a list of tuples.
@@ -226,7 +227,7 @@ def play_game_self(policy_fn, game_name, **kwargs):
                 greedy_action_value = max(root_N)
                 action_was_greedy_list_N.append(root_N[action] == greedy_action_value)
 
-        examples.append([state.information_state(), state_to_board(state, state_shape), policy_list, None, targets])
+        examples.append([state.information_state_string(), state_to_board(state, state_shape), policy_list, None, targets])
 
         # Take the actual action in the environment
         state.apply_action(action)

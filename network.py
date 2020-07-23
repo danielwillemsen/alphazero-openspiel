@@ -13,7 +13,7 @@ def state_to_board(state, state_shape):
     :return: neural network suitable representation of the board. Last layer indicates the current player.
     """
     board = np.zeros((state_shape[0]+1, state_shape[1], state_shape[2])) + state.current_player()
-    board[:-1] = np.asarray(state.information_state_as_normalized_vector()).reshape(state_shape)
+    board[:-1] = np.asarray(state.observation_tensor()).reshape(state_shape)
     board[-1] = np.zeros((1, state_shape[1], state_shape[2])) + state.current_player()
     return board
 

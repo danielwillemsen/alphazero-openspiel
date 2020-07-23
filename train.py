@@ -27,13 +27,13 @@ class Trainer:
         self.save = True                        # Save neural network
         self.save_n_gens = 10                   # How many iterations until network save
         self.test_n_gens = 10                   # How many iterations until testing
-        self.n_tests = 200                      # How many tests to perform for testing
+        self.n_tests = 2                      # How many tests to perform for testing
         self.use_gpu = True                     # Use GPU (if available)
         self.n_pools = 1                        # Amount of worker pools to create (also amount of GPU's to utilize)
         self.n_processes = 1                    # Amount of game processes to start for every pool.
 
         # Algorithm Parameters
-        self.n_games_per_generation = 500       # How many games to generate per iteration
+        self.n_games_per_generation = 50      # How many games to generate per iteration
         self.n_batches_per_generation = 500     # How batches of neural network training per iteration
         self.n_games_buffer_max = 20000         # How many games to store in FIFO buffer, at most. Buffer is grown.
         self.batch_size = 256                   # Batch size for neural network training
@@ -43,7 +43,7 @@ class Trainer:
         self.dirichlet_ratio = 0.25
         self.uct_train = 2.5
         self.uct_test = 2.5
-        self.n_playouts_train = 100
+        self.n_playouts_train = 10
         self.backup = backup
         self.tree_strap = False
         self.it = 0
@@ -53,7 +53,7 @@ class Trainer:
         self.game = pyspiel.load_game(self.name_game)
         self.buffer = []
         self.num_distinct_actions = self.game.num_distinct_actions()
-        self.state_shape = self.game.information_state_normalized_vector_shape()
+        self.state_shape = self.game.observation_tensor_shape()
         self.game = pyspiel.load_game(self.name_game)
         self.games_played = 0
         self.start_time = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
