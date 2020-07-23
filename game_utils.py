@@ -249,6 +249,8 @@ def play_game_self(policy_fn, game_name, **kwargs):
     # For on-policy, the return needs to be set after finishing the game.
     if "on-policy" in backup_types:
         reward = state.returns()[0]
+        if initial_sequence:
+            reward *= (-1)**len(initial_sequence)
         for i in range(len(examples)):
             examples[i][4]["on-policy"] = reward
             reward *= -1

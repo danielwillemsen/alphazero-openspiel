@@ -41,8 +41,8 @@ class PVTable_tictactoe:
         self.extra = dict() #np.zeros((length, 2)) + 0.999
 
     def policy_fn(self, state):
-        if str(state) in self.values.keys():
-            string = str(state)
+        string = state.information_state_string()
+        if string in self.values.keys():
             pol = self.policy[string]
             val = self.values[string]
         else:
@@ -81,7 +81,7 @@ def update_pvtables_tictactoe(example, pvtables):
             pvtable.policy[state] = alpha_p * policy + 1./9.
             pvtable.visits[state] = 1
 
-backup_types = ["on-policy", "soft-Z", "A0C", "off-policy", "greedy-forward", "greedy-forward-N"]
+backup_types = ["on-policy", "soft-Z", "A0C", "off-policy"]#, "greedy-forward", "greedy-forward-N"]
 
 game = pyspiel.load_game("connect_four")
 length = 5
@@ -92,7 +92,7 @@ alpha = 0.025
 backup_res = {backup_type: [] for backup_type in backup_types}
 
 for i_game in range(n_games):
-    examples = play_game_self(pvtables["off-policy"].policy_fn, "connect_four",
+    examples = play_game_self(pvtables["off-policy"].policy_fn, "tic_tac_toe",
                               keep_search_tree=False,
                               n_playouts=100,
                               c_puct=2.5,
@@ -100,14 +100,14 @@ for i_game in range(n_games):
                               backup="off-policy",
                               backup_types=backup_types,
                               length=length,
-                              initial_sequence=[1,2,3,4,1,2,3,4,1,2,3,4,5,1,2,3, 1,2,3,2])
+                              initial_sequence=[0,])
     for example in examples:
         update_pvtables_tictactoe(example, pvtables)
 
         #For further data visualization
         for key, pvtable in pvtables.items():
             #backup_res[key].append(np.copy(pvtable.values))
-            backup_res[key].append(np.copy(pvtable.values["1 2 3 4 1 2 3 4 1 2 3 4 5 1 2 3 1 2 3 2"]))
+            backup_res[key].append(np.copy(pvtable.values["0"]))
 
     # if backup_res["off-policy"][-1][3,0] > 0.0001:
     #     a=2
