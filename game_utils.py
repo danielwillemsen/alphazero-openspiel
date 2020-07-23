@@ -159,6 +159,10 @@ def play_game_self(policy_fn, game_name, **kwargs):
         from network import state_to_board
         game = pyspiel.load_game(game_name)
     state = game.new_initial_state()
+    initial_sequence = kwargs.get("initial_sequence", None)
+    if initial_sequence:
+        for act in initial_sequence:
+            state.apply_action(act)
     state_shape = game.observation_tensor_shape()
     num_distinct_actions = game.num_distinct_actions()
     alphazero_bot = AlphaZeroBot(game, 0, policy_fn, self_play=True, **kwargs)
@@ -218,12 +222,12 @@ def play_game_self(policy_fn, game_name, **kwargs):
                 targets["off-policy"] = target
             if "greedy-forward" in backup_types:
                 targets["greedy-forward"] = target
-                root_Q = [child.Q if child.N > 0 else -99.0 for child in alphazero_bot.mcts.root.children.values()]
+                root_Q = {key: (child.Q if child.N > 0 else -99.0) for (key, child) in alphazero_bot.mcts.root.children.items()}
                 greedy_action_value = max(root_Q)
                 action_was_greedy_list.append(root_Q[action] >= greedy_action_value - 0.0001)
             if "greedy-forward-N" in backup_types:
                 targets["greedy-forward-N"] = target
-                root_N = [child.N if child.N > 0 else -99.0 for child in alphazero_bot.mcts.root.children.values()]
+                root_N = {key: (child.N if child.N > 0 else -99.0) for (key, child) in alphazero_bot.mcts.root.children.items()}
                 greedy_action_value = max(root_N)
                 action_was_greedy_list_N.append(root_N[action] == greedy_action_value)
 

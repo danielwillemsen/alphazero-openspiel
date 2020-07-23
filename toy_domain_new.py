@@ -46,7 +46,7 @@ class PVTable_tictactoe:
             pol = self.policy[string]
             val = self.values[string]
         else:
-            pol = np.zeros(9)+ 1./9.
+            pol = np.zeros(9) + 1./9.
             val = 0.
 
         return list(pol), val#/(1.0-self.extra[loc1, player])
@@ -65,34 +65,53 @@ def update_pvtables(example, pvtables):
         pvtable.values[loc1, player] = (1 - alpha) * pvtable.values[loc1, player] + alpha * value
         pvtable.policy[loc1, player, :] = (1 - alpha_p) * pvtable.policy[loc1, player] + alpha_p * policy
 
+def update_pvtables_tictactoe(example, pvtables):
+    state = example[0]
+    policy = np.array(example[2])
+    for key, pvtable in pvtables.items():
+        value = float(example[4][key])
+        alpha_p = 0.1
+        if state in pvtable.values.keys():
+            pvtable.values[state] = (1 - alpha) * pvtable.values[state] + alpha * value
+            pvtable.policy[state]  = (1 - alpha_p) * pvtable.policy[state] + alpha_p * policy
+            pvtable.visits[state] += 1
+
+        else:
+            pvtable.values[state] = alpha * value
+            pvtable.policy[state] = alpha_p * policy + 1./9.
+            pvtable.visits[state] = 1
+
 backup_types = ["on-policy", "soft-Z", "A0C", "off-policy", "greedy-forward", "greedy-forward-N"]
 
 game = pyspiel.load_game("connect_four")
 length = 5
 n_games = 1000
 num_distinct_actions = 4
-pvtables = {backup_type: PVTable(length) for backup_type in backup_types}
+pvtables = {backup_type: PVTable_tictactoe(length) for backup_type in backup_types}
 alpha = 0.025
 backup_res = {backup_type: [] for backup_type in backup_types}
 
 for i_game in range(n_games):
-    examples = play_game_self(pvtables["off-policy"].policy_fn, "toy",
+    examples = play_game_self(pvtables["off-policy"].policy_fn, "connect_four",
                               keep_search_tree=False,
                               n_playouts=100,
                               c_puct=2.5,
                               dirichlet_ratio=0.25,
                               backup="off-policy",
                               backup_types=backup_types,
-                              length=length)
+                              length=length,
+                              initial_sequence=[1,2,3,4,1,2,3,4,1,2,3,4,5,1,2,3, 1,2,3,2])
     for example in examples:
-        update_pvtables(example, pvtables)
+        update_pvtables_tictactoe(example, pvtables)
 
         #For further data visualization
         for key, pvtable in pvtables.items():
-            backup_res[key].append(np.copy(pvtable.values))
-    if backup_res["off-policy"][-1][3,0] > 0.0001:
-        a=2
-    if i_game%200 == 0:
+            #backup_res[key].append(np.copy(pvtable.values))
+            backup_res[key].append(np.copy(pvtable.values["1 2 3 4 1 2 3 4 1 2 3 4 5 1 2 3 1 2 3 2"]))
+
+    # if backup_res["off-policy"][-1][3,0] > 0.0001:
+    #     a=2
+    if i_game%2 == 0:
         print("Game_no:", i_game, "/", n_games)
 
 backup_plot_res = {backup_type: [] for backup_type in backup_types}
@@ -100,7 +119,9 @@ for key, val in backup_res.items():
     backup_res[key] = np.stack(val, axis=0)
 
 for key, val in backup_res.items():
-    plt.plot(val[:, 3, 0], label=key)
+    plt.plot(val, label=key)
+
+#    plt.plot(val[:, 3, 0], label=key)
 plt.legend()
 plt.show()
 
