@@ -92,10 +92,10 @@ def update_pvtables_tictactoe(example, pvtables):
             pvtable.policy[state] = alpha_p * policy + 1./9.
             pvtable.visits[state] = 1
 
-backup_types = ["on-policy", "soft-Z", "A0C", "off-policy"]#, "greedy-forward", "greedy-forward-N"]
+backup_types = ["on-policy", "soft-Z", "A0C", "off-policy", "A0C2"]#, "greedy-forward", "greedy-forward-N"]
 
 length = 5
-n_games = 1000
+n_games = 200
 num_distinct_actions = 4
 pvtables = {backup_type: PVTable_tictactoe(length, use_random=False) for backup_type in backup_types}
 alpha = 0.025
@@ -104,6 +104,9 @@ backup_res = {backup_type: [] for backup_type in backup_types}
 tables = [tab for tab in pvtables.values()]
 use_table = pvtables["off-policy"]
 use_table.tables = tables
+initial_sequence = [0, 1, 4]
+best_next_actions = [3, 4, 6]
+
 for i_game in range(n_games):
     examples = play_game_self(pvtables["off-policy"].policy_fn, "tic_tac_toe",
                               keep_search_tree=False,
@@ -113,14 +116,14 @@ for i_game in range(n_games):
                               backup="off-policy",
                               backup_types=backup_types,
                               length=length,
-                              initial_sequence=[0, 4, 2])
+                              initial_sequence=initial_sequence)
     for example in examples:
         update_pvtables_tictactoe(example, pvtables)
 
         #For further data visualization
         for key, pvtable in pvtables.items():
             #backup_res[key].append(np.copy(pvtable.values))
-            backup_res[key].append(np.copy(pvtable.values["0 4 2"]))
+            backup_res[key].append(np.copy(pvtable.values["0 1 4"]))
 
     if i_game%2 == 0:
         print("Game_no:", i_game, "/", n_games)

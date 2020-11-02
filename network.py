@@ -79,6 +79,122 @@ class Net(nn.Module):
             v = float(v_t)
         return ps, v
 
+class SmallNet(nn.Module):
+    """Neural network for connect_four.
+    The input representation is a ([empty locations, own pieces, opponent pieces] x width x height) matrix.
+    The output is a vector of size width, for the policy and an additional scalar for the value.
+    """
+
+    def __init__(self, state_shape, num_distinct_actions, **kwargs):
+        super(SmallNet, self).__init__()
+        self.state_shape = state_shape
+        self.num_filters_input = state_shape[0] + 1
+        self.height = state_shape[1]
+        self.width = state_shape[2]
+        self.num_distinct_actions = num_distinct_actions
+
+        self.device = kwargs.get('device', torch.device('cpu'))
+        self.time1 = time.time()
+        self.n_filts = 25
+
+        self.resblock1 = ResidualBlock(self.num_filters_input, self.n_filts)
+        self.resblock2 = ResidualBlock(self.n_filts, self.n_filts)
+
+        self.fc1 = nn.Linear(self.n_filts*self.width*self.height, self.num_distinct_actions + 1)
+        return
+
+    def forward(self, x):
+        """
+
+        @param x: input tensor
+        @return: Policy tensor and value tensor
+        """
+        x = self.resblock1(x)
+        x = self.resblock2(x)
+        #x = self.resblock3(x)
+        #x = self.resblock4(x)
+        #x = self.resblock5(x)
+
+        x = x.view(-1, self.height * self.width * self.n_filts)
+        x = self.fc1(x)
+        xp, v = x.split(self.num_distinct_actions, 1)
+
+        return F.softmax(xp, dim=1), torch.tanh(v)
+
+    def predict(self, state):
+        """
+
+        @param state: state to predict next move for
+        @return: List of policy and the value
+        """
+        board = state_to_board(state, self.state_shape)
+
+        with torch.no_grad():
+            tens = torch.from_numpy(board).float().to(self.device)
+            tens = tens.unsqueeze(0)
+            p_t, v_t = self.forward(tens)
+            ps = p_t.tolist()[0]
+            v = float(v_t)
+        return ps, v
+
+class SmallNet2(nn.Module):
+    """Neural network for connect_four.
+    The input representation is a ([empty locations, own pieces, opponent pieces] x width x height) matrix.
+    The output is a vector of size width, for the policy and an additional scalar for the value.
+    """
+
+    def __init__(self, state_shape, num_distinct_actions, **kwargs):
+        super(SmallNet, self).__init__()
+        self.state_shape = state_shape
+        self.num_filters_input = state_shape[0] + 1
+        self.height = state_shape[1]
+        self.width = state_shape[2]
+        self.num_distinct_actions = num_distinct_actions
+
+        self.device = kwargs.get('device', torch.device('cpu'))
+        self.time1 = time.time()
+        self.n_filts = 50 #original 25
+
+        self.resblock1 = ResidualBlock(self.num_filters_input, self.n_filts)
+        self.resblock2 = ResidualBlock(self.n_filts, self.n_filts)
+        self.resblock3 = ResidualBlock(self.n_filts, self.n_filts)
+
+        self.fc1 = nn.Linear(self.n_filts*self.width*self.height, self.num_distinct_actions + 1)
+        return
+
+    def forward(self, x):
+        """
+
+        @param x: input tensor
+        @return: Policy tensor and value tensor
+        """
+        x = self.resblock1(x)
+        x = self.resblock2(x)
+        x = self.resblock3(x) #original out
+        #x = self.resblock4(x)
+        #x = self.resblock5(x)
+
+        x = x.view(-1, self.height * self.width * self.n_filts)
+        x = self.fc1(x)
+        xp, v = x.split(self.num_distinct_actions, 1)
+
+        return F.softmax(xp, dim=1), torch.tanh(v)
+
+    def predict(self, state):
+        """
+
+        @param state: state to predict next move for
+        @return: List of policy and the value
+        """
+        board = state_to_board(state, self.state_shape)
+
+        with torch.no_grad():
+            tens = torch.from_numpy(board).float().to(self.device)
+            tens = tens.unsqueeze(0)
+            p_t, v_t = self.forward(tens)
+            ps = p_t.tolist()[0]
+            v = float(v_t)
+        return ps, v
 
 class ResidualBlock(nn.Module):
     def __init__(self, in_channels, out_channels):

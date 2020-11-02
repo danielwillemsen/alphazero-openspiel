@@ -145,6 +145,40 @@ def test_zero_vs_zero(policy_fn, max_search_nodes, game_name, policy_fn2=None, g
     return score1, score2, statistics
 
 
+def test_net_vs_net(policy_fn, max_search_nodes, game_name, policy_fn2=None, generate_statistics=False, **kwargs):
+    settings1 = dict(kwargs.get("settings1", None))
+    settings2 = dict(kwargs.get("settings2", None))
+    statistics = {}
+
+    if not policy_fn2:
+        policy_fn2 = policy_fn
+    game = pyspiel.load_game(game_name)
+
+    # Alphazero first
+    zero1_bot = NeuralNetBot(game, 0, policy_fn=policy_fn)
+    zero2_bot = NeuralNetBot(game, 1, policy_fn=policy_fn2)
+
+    if generate_statistics:
+        score1, statistics_game1 = play_game(game, zero1_bot, zero2_bot, generate_statistics=generate_statistics)
+        statistics["game1"] = statistics_game1
+    else:
+        score1 = play_game(game, zero1_bot, zero2_bot, generate_statistics=generate_statistics)
+
+    # Random bot first
+    zero1_bot = NeuralNetBot(game, 0, policy_fn=policy_fn)
+    zero2_bot = NeuralNetBot(game, 1, policy_fn=policy_fn2)
+
+    if generate_statistics:
+        score2, statistics_game2 = play_game(game, zero2_bot, zero1_bot, generate_statistics=generate_statistics)
+        statistics_game2["player1"], statistics_game2["player2"] = statistics_game2["player2"], statistics_game2["player1"]
+        statistics["game2"] = statistics_game2
+        score2 *= -1
+    else:
+        score2 = -play_game(game, zero2_bot, zero1_bot, generate_statistics=generate_statistics)
+
+    return score1, score2, statistics
+
+
 def play_game_self(policy_fn, game_name, **kwargs):
     examples = []
     action_was_greedy_list = []
@@ -203,6 +237,17 @@ def play_game_self(policy_fn, game_name, **kwargs):
         if "A0C" in backup_types:
             target = max([child.Q if child.N > 0 else -99.0 for child in alphazero_bot.mcts.root.children.values()])
             targets["A0C"] = target
+        if "A0C2" in backup_types:
+            node = copy.deepcopy(alphazero_bot.mcts.root)
+            value_list = {action_temp: (child.N + child.P if child.N > 0 else -99.0) for action_temp, child in
+                          node.children.items()}
+            action_temp = max(value_list, key=value_list.get)
+            root2 = alphazero_bot.mcts.root.children[action_temp]
+            if len(root2.children):
+                target = max([child.Q if child.N > 0 else -99.0 for child in root2.children.values()])*-1
+            else:
+                target = root2.Q
+            targets["A0C2"] = target
 
         # A0GB:
         if "off-policy" or "greedy-forward" or "greedy-forward-N" in backup_types:
@@ -231,7 +276,7 @@ def play_game_self(policy_fn, game_name, **kwargs):
                 greedy_action_value = max(root_N)
                 action_was_greedy_list_N.append(root_N[action] == greedy_action_value)
 
-        examples.append([state.information_state_string(), state_to_board(state, state_shape), policy_list, None, targets])
+        examples.append([state.information_state_string(), state_to_board(state, state_shape), policy_list, None, targets, {key: val.Q for key, val in alphazero_bot.mcts.root.children.items()}])
 
         # Take the actual action in the environment
         state.apply_action(action)

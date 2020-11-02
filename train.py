@@ -19,16 +19,16 @@ logger = logging.getLogger('alphazero')
 
 
 class Trainer:
-    def __init__(self, name="openspieltest", backup="on-policy"):
+    def __init__(self, name="openspieltest", backup="on-policy", game="connect_four"):
         # Experiment Parameters
-        self.name_game = "connect_four"#"breakthrough(rows=6,columns=6)"         # Name of game (should be from open_spiel library)
+        self.name_game = game#"breakthrough(rows=6,columns=6)"         # Name of game (should be from open_spiel library)
         self.name_run = name         # Name of run
         self.model_path = "models/"             # Path to save the models
         self.save = True                        # Save neural network
         self.save_n_gens = 10                   # How many iterations until network save
         self.test_n_gens = 10                   # How many iterations until testing
         self.n_tests = 2                      # How many tests to perform for testing
-        self.use_gpu = True                     # Use GPU (if available)
+        self.use_gpu = False                     # Use GPU (if available)
         self.n_pools = 1                        # Amount of worker pools to create (also amount of GPU's to utilize)
         self.n_processes = 1                    # Amount of game processes to start for every pool.
 
@@ -64,11 +64,11 @@ class Trainer:
         fh = logging.FileHandler("logs/" + str(self.start_time) + str(self.name_run) + ".log")
         fh.setFormatter(formatter)
         fh.setLevel('INFO')
-        ch = logging.StreamHandler()
-        ch.setLevel('INFO')
-        ch.setFormatter(formatter)
-        logger.addHandler(ch)
-        logger.addHandler(fh)
+        # ch = logging.StreamHandler()
+        # ch.setLevel('INFO')
+        # ch.setFormatter(formatter)
+        # logger.addHandler(ch)
+        # logger.addHandler(fh)
         logger.info('Logger started')
         logger.info(str(torch.cuda.is_available()))
         logger.info(str(backup))
@@ -147,7 +147,7 @@ class Trainer:
             v = loss_v
             loss_tot_v += v
             if i % 100 == 99:
-                logger.info("Batch: " + str(i) + "Loss policy: " + str(loss_tot_p / 100.) + "Loss value: " + str(
+                print("Batch: " + str(i) + "Loss policy: " + str(loss_tot_p / 100.) + "Loss value: " + str(
                     loss_tot_v / 100.))
                 loss_tot_v = 0
                 loss_tot_p = 0
