@@ -14,19 +14,18 @@ import random
 from tic_tac_toe_readin import get_move_dict
 from scipy import stats
 
+#Input path with all stored networks
 mypath = "./models/toynets_NN_meteor_bignet/"
 onlyfiles = [f for f in listdir(mypath) if isfile(join(mypath, f))]
 print(len(onlyfiles))
 runid = "1"
 game = pyspiel.load_game("tic_tac_toe")
-length = 50
-n_games = 200
-# num_distinct_actions = 4
+
+
+
 state_shape = game.observation_tensor_shape()
 num_distinct_actions = game.num_distinct_actions()
-backup_types = ["on-policy"]#, "soft-Z", "A0C", "off-policy"]#, "greedy-forward", "greedy-forward-N"]
-backup_types = ["on-policy", "soft-Z", "A0C", "off-policy"]#, "greedy-forward", "greedy-forward-N"]
-print(len(onlyfiles))
+backup_types = ["on-policy", "soft-Z", "A0C", "off-policy"]
 
 paths = []
 path_str = []
@@ -43,6 +42,7 @@ while len(paths) < 250:
     if not state.is_terminal() and str(state) not in path_str and len(state.legal_actions()) > 1:
         paths.append(path)
         path_str.append(str(state))
+
 print(len(paths))
 print("Loading state dict")
 state_dict = get_move_dict()
@@ -99,9 +99,8 @@ for type in types:
                     state = game.new_initial_state()
                     for action in path:
                         state.apply_action(action)
-                    #print(state)
                     pol, val = policy_fn_self(state)
-                    #print(val)
+
                     # Fig 12
                     found = False
                     while not found:
